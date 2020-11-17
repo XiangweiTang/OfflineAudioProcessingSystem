@@ -11,6 +11,9 @@ namespace OfflineAudioProcessingSystem
     {
         public Test()
         {
+            string path = @"D:\Music\Aimer\Dawn\LAST STARDUST.wav";
+            Wave w = new Wave();
+            w.DeepParse(path);
         }
     }
 }
