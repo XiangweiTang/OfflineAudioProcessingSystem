@@ -23,7 +23,7 @@ namespace Common
             return BitConverter.ToInt32(buffer, 0);
         }
 
-        public static short ReatShortFromFileStream(this FileStream fs)
+        public static short ReadShortFromFileStream(this FileStream fs)
         {
             byte[] buffer = new byte[2];
             fs.Read(buffer, 0, 2);

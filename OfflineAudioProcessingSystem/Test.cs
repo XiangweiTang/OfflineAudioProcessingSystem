@@ -3,14 +3,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Common;
 
 namespace OfflineAudioProcessingSystem
 {
-    class Program
+    class Test
     {
-        static void Main(string[] args)
+        public Test()
         {
-            Test t = new Test();
         }
     }
 }
