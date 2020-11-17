@@ -10,7 +10,7 @@ namespace OfflineAudioProcessingSystem
     {
         static void Main(string[] args)
         {
-            Test t = new Test();
+            new ConfigHelper().Run(args);
         }
     }
 }
