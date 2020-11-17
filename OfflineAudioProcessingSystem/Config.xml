@@ -3,4 +3,8 @@
   <HelloWorld>
     <Name>Bobo</Name>
   </HelloWorld>
+  <Common>
+    <Sox Path="sox.exe"/>
+    <Ffmpeg Path="ffmpeg.exe"/>
+  </Common>
 </Root>
