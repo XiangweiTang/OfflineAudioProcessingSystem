@@ -16,26 +16,50 @@ namespace Common
         public short BitsPerSample { get; private set; } = 1;
         public short BlockAlign { get; private set; } = 1;
         public double AudioLength { get; private set; } = 0;
+        public double RMS
+        {
+            get
+            {
+                Sanity.Requires(IsDeep, $"Please deep parse the wave file.");
+                return _RMS;
+            }
+        }
+        private double _RMS = 0;
 
         private const string RIFF = "RIFF";
         private const string WAVE = "WAVE";
         private const string FORMAT = "fmt ";
         private const string DATA = "data";
+
+        private bool IsDeep = false;
         public WaveChunk FormatChunk { get; private set; }= new WaveChunk { Name = "", Length = -1, Offset = -1 };
         public WaveChunk DataChunk { get; private set; } = new WaveChunk { Name = "", Length = -1, Offset = -1 };
         public List<WaveChunk> ChunkList { get; private set; } = new List<WaveChunk>();
         public Wave() { }
-        
-        public void Load(FileStream fs)
-        {
-            ParseWave(fs);
-        }
-        public void Load(string filePath)
+        public void ShallowParse(string filePath)
         {
             using(FileStream fs=new FileStream(filePath, FileMode.Open, FileAccess.Read))
             {
-                Load(fs);
+                ShallowParse(fs);
             }
+        }
+        public void ShallowParse(FileStream fs)
+        {
+            IsDeep = false;
+            ParseWave(fs);
+        }
+        public void DeepParse(string filePath)
+        {
+            using(FileStream fs=new FileStream(filePath, FileMode.Open, FileAccess.Read))
+            {
+                DeepParse(fs);
+            }
+        }
+
+        public void DeepParse(FileStream fs)
+        {
+            IsDeep = true;
+            ParseWave(fs);
         }
         private void ParseWave(FileStream fs)
         {
@@ -97,6 +121,8 @@ namespace Common
             Sanity.Requires(!string.IsNullOrEmpty(FormatChunk.Name), "Invalid wave file, missing format chunk.");
             Sanity.Requires(!string.IsNullOrEmpty(DataChunk.Name), "Invalid wave file, missing data chunk.");
             PostCheckFormatChunk(fs);
+            if (IsDeep)
+                PostCheckDataChunk(fs);
         }
 
         private void PostCheckFormatChunk(FileStream fs)
@@ -113,6 +139,36 @@ namespace Common
             Sanity.Requires(BitsPerSample * NumChannels == 8 * BlockAlign, $"Invalid audio: BitsPerSample: {BitsPerSample}, NumChannels: {NumChannels}, BlockAlign: {BlockAlign}");
 
             AudioLength = (double)DataChunk.Length / ByteRate;
+        }
+
+        private void PostCheckDataChunk(FileStream fs)
+        {
+            fs.Seek(DataChunk.Offset, SeekOrigin.Begin);
+            long totalSampleEnergy = 0;
+            int totalSamples = 0;
+            int divisor = 0;
+            Func<FileStream, int> GetSampleValue = null;
+            switch (BitsPerSample)
+            {
+                case 8:
+                    GetSampleValue = x => fs.ReadByte();
+                    divisor = 256;
+                    break;
+                case 16:
+                    GetSampleValue = x => x.ReadShortFromFileStream();
+                    divisor = 65536;
+                    break;
+                default:
+                    break;
+            }
+            Sanity.Requires(GetSampleValue != null, $"Unspported wave file. Bits per sample: {BitsPerSample}");
+            while (fs.Position < fs.Length)
+            {
+                int sampleValue = GetSampleValue(fs);
+                totalSampleEnergy += sampleValue * sampleValue;
+                totalSamples++;
+            }
+            _RMS = Math.Sqrt((double)totalSampleEnergy / totalSamples) / divisor;
         }
     }
 
