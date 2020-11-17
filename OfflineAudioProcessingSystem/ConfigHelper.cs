@@ -35,6 +35,7 @@ namespace OfflineAudioProcessingSystem
                     PrintConfig();
                 Config cfg = new Config();
                 cfg.Load(configPath);
+                Init(cfg);
                 var feature = GetFeature(cfg.TaskName);
                 if (feature != null)
                     feature.LoadAndRun(configPath);
@@ -43,6 +44,12 @@ namespace OfflineAudioProcessingSystem
             {
                 Logger.WriteLine(e.Message, true, true);
             }
+        }
+
+        private void Init(Config cfg)
+        {
+            LocalCommon.SoxPath = cfg.SoxPath;
+            LocalCommon.FfmpegPath = cfg.FfmpegPath;
         }
 
         private Feature GetFeature(string featureName)
