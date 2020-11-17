@@ -9,11 +9,11 @@ namespace OfflineAudioProcessingSystem
 {
     class Test
     {
-        public Test()
+        public Test(string[] args)
         {
             string path = @"D:\Music\Aimer\Dawn\LAST STARDUST.wav";
             Wave w = new Wave();
-            w.DeepParse(path);
+            w.ShallowParse(path);
         }
     }
 }

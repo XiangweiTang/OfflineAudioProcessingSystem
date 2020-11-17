@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.IO;
+using System.Reflection;
 
 namespace Common
 {
@@ -28,6 +29,26 @@ namespace Common
             byte[] buffer = new byte[2];
             fs.Read(buffer, 0, 2);
             return BitConverter.ToInt16(buffer, 0);
+        }
+
+        public static IEnumerable<string> ReadEmbed(string name, string asmbName="Common")
+        {
+            Assembly asmb = Assembly.Load(asmbName);
+            using(StreamReader sr=new StreamReader(asmb.GetManifestResourceStream(name)))
+            {
+                string line;
+                while ((line = sr.ReadLine()) != null)
+                    yield return line;
+            }
+        }
+
+        public static string ReadEmbedAll(string name, string asmbName = "Common")
+        {
+            Assembly asmb = Assembly.Load(asmbName);
+            using (StreamReader sr = new StreamReader(asmb.GetManifestResourceStream(name)))
+            {
+                return sr.ReadToEnd();
+            }
         }
     }
 }

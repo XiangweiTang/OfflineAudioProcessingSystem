@@ -50,6 +50,7 @@
     <Compile Include="Sequence.cs" />
     <Compile Include="StringOp.cs" />
     <Compile Include="Wave.cs" />
+    <Compile Include="Xml.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

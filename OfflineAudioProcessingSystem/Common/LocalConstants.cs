@@ -8,6 +8,7 @@ namespace OfflineAudioProcessingSystem
 {
     public static class LocalConstants
     {
+        public const string LOCAL_ASMB_NAME = "OfflineAudioProcessingSystem";
         public const string SOX_PATH = @"";
         public const string FFMPEG_PATH = @"";
     }
