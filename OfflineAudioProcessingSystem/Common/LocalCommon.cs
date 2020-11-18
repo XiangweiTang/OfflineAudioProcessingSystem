@@ -33,5 +33,11 @@ namespace OfflineAudioProcessingSystem
             string arguments = $"-f concat -i {listPath} -c copy {outputAudioPath}";
             RunFfmpeg(arguments);
         }
+
+        public static void SetAudio(string inputAudioPath, int sampleRate, int channelNumber , string outputAudioPath)
+        {
+            string arguments = $"-i {inputAudioPath} -ar {sampleRate} -ac {channelNumber} {outputAudioPath}";
+            RunFfmpeg(arguments);
+        }
     }
 }
