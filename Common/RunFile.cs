@@ -12,6 +12,7 @@ namespace Common
     {
         public static void Run(string fileName, string arguments, bool createNewWindow, string workingDirectory)
         {
+            Sanity.Requires(File.Exists(fileName), "Missing file run file.");
             using(Process proc=new Process())
             {
                 proc.StartInfo = new ProcessStartInfo

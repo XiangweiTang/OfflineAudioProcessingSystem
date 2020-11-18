@@ -4,7 +4,7 @@
     <Name>Bobo</Name>
   </HelloWorld>
   <Common>
-    <Sox Path="sox.exe"/>
-    <Ffmpeg Path="ffmpeg.exe"/>
+    <Sox Path="C:\Program Files (x86)\sox-14-4-2\sox.exe"/>
+    <Ffmpeg Path="D:\AutomationSystem\ExternalTools\ffmpeg.exe"/>
   </Common>
 </Root>
