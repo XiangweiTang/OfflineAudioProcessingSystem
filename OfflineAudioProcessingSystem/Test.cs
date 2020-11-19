@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Common;
+using System.IO;
 
 namespace OfflineAudioProcessingSystem
 {
@@ -11,9 +12,8 @@ namespace OfflineAudioProcessingSystem
     {
         public Test(string[] args)
         {
-            string path = @"D:\Music\Aimer\Dawn\LAST STARDUST.wav";
-            Wave w = new Wave();
-            w.ShallowParse(path);
+            AudioTransfer.AudioTransfer at = new AudioTransfer.AudioTransfer();
+            at.TestRun();
         }
     }
 }

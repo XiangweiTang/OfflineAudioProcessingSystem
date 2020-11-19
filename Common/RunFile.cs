@@ -19,7 +19,7 @@ namespace Common
                 {
                     FileName = fileName,
                     Arguments=arguments,
-                    UseShellExecute = !createNewWindow,
+                    UseShellExecute = createNewWindow,
                     WorkingDirectory = workingDirectory,
                 };
                 proc.Start();

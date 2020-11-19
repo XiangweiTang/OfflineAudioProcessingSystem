@@ -9,5 +9,5 @@ namespace OfflineAudioProcessingSystem
     public static class LocalConstants
     {
         public const string LOCAL_ASMB_NAME = "OfflineAudioProcessingSystem";
-    }
+    }    
 }
