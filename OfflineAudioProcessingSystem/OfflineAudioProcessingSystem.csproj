@@ -46,6 +46,8 @@
     <Compile Include="Config.cs" />
     <Compile Include="ConfigHelper.cs" />
     <Compile Include="Feature.cs" />
+    <Compile Include="Features\AudioTransfer\AudioTransfer.cs" />
+    <Compile Include="Features\AudioTransfer\ConfigAudioTransfer.cs" />
     <Compile Include="Features\HelloWorld\ConfigHelloWorld.cs" />
     <Compile Include="Features\HelloWorld\HelloWorld.cs" />
     <Compile Include="Common\LocalCommon.cs" />
@@ -66,5 +68,9 @@
   <ItemGroup>
     <EmbeddedResource Include="Config.xml" />
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Internal\Data\AudioInputExt.txt" />
+  </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

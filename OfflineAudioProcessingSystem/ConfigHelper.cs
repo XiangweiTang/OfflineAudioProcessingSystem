@@ -19,6 +19,14 @@ namespace OfflineAudioProcessingSystem
             }
             else if (args[0] == "magictest")
             {
+                string key = Guid.NewGuid().ToString().Substring(0, 4);
+                Console.WriteLine("Please enter the key:");
+                Console.WriteLine(key);
+                string s = Console.ReadLine();
+                if (s != key)
+                    return;
+                Config cfg = new Config();
+                Init(cfg);
                 _ = new Test(args.Skip(1).ToArray());
             }
             else

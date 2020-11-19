@@ -11,8 +11,8 @@ namespace OfflineAudioProcessingSystem
     class Config
     {
         public string TaskName { get; private set; } = "NA";
-        public string SoxPath { get; private set; } = "";
-        public string FfmpegPath { get; private set; } = "";
+        public string SoxPath { get; private set; } = @"C:\Program Files (x86)\sox-14-4-2\sox.exe";
+        public string FfmpegPath { get; private set; } = @"D:\AutomationSystem\ExternalTools\ffmpeg.exe";
         protected XmlNode TaskNode = null;
         private XmlNode CommonNode = null;
         public Config() { }
