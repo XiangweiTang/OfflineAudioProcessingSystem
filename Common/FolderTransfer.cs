@@ -10,10 +10,12 @@ namespace Common
     public abstract class FolderTransfer
     {
         public int MaxParallel { get; set; } = 10;
+        protected object LockObj = new object();
         public FolderTransfer() { }
         protected virtual void PreRun() { }
         public void Run(string inputFolder, string outputFolder, int maxParallel = 10)
         {
+            MaxParallel = maxParallel;
             PreRun();
             FolderTransferRecursively(inputFolder, outputFolder);
             PostRun();

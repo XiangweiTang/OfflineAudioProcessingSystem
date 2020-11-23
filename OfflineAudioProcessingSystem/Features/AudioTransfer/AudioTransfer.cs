@@ -11,6 +11,12 @@ namespace OfflineAudioProcessingSystem.AudioTransfer
     class AudioTransfer : Feature
     {
         ConfigAudioTransfer Cfg = new ConfigAudioTransfer();
+
+        public override string GetFeatureName()
+        {
+            return "AudioTransfer";
+        }
+
         protected override void LoadConfig(string configPath)
         {
             Cfg.Load(configPath);
@@ -20,14 +26,14 @@ namespace OfflineAudioProcessingSystem.AudioTransfer
         {
             if (Directory.Exists(Cfg.InputPath))
             {
-                var aft = new AudioFolderTransfer()
+                var aft = new AudioFolderTransfer(Cfg.ReportPath)
                 {
                     SampleRate = Cfg.SampleRate,
                     NumChannels = Cfg.NumChannels,
                     MaxParallel = 5
                 };
 
-                new AudioFolderTransfer().Run(Cfg.InputPath, Cfg.OutputPath);
+                aft.Run(Cfg.InputPath, Cfg.OutputPath);
             }
             else if (File.Exists(Cfg.InputPath))
             {
@@ -45,8 +51,15 @@ namespace OfflineAudioProcessingSystem.AudioTransfer
         HashSet<string> ValidExtSet = new HashSet<string>();
         public int SampleRate { get; set; } = 16000;
         public int NumChannels { get; set; } = 1;
+        private List<string> ReportList = new List<string>();
+        private string ReportPath = "";
+        public AudioFolderTransfer(string reportPath) : base()
+        {
+            ReportPath = reportPath;
+        }
         protected override void PreRun()
         {
+            ReportList.Add("Original name\tWave name\tDuration(s)");
             ValidExtSet = IO.ReadEmbed($"{LocalConstants.LOCAL_ASMB_NAME}.Internal.Data.AudioInputExt.txt", LocalConstants.LOCAL_ASMB_NAME)
                 .ToHashSet();
         }
@@ -54,9 +67,14 @@ namespace OfflineAudioProcessingSystem.AudioTransfer
         {
             string ext = inputPath.Split('.').Last().ToLower();
             Sanity.Requires(ValidExtSet.Contains(ext), $"Invalid extension: {ext}");
-            inputPath = inputPath.WrapPath();
-            outputPath = outputPath.WrapPath();
-            LocalCommon.SetAudio(inputPath, SampleRate, NumChannels, outputPath);
+            LocalCommon.SetAudio(inputPath.WrapPath(), SampleRate, NumChannels, outputPath.WrapPath());
+            Wave w = new Wave();
+            w.ShallowParse(outputPath);
+            string reportLine = $"{inputPath.Split('\\').Last()}\t{outputPath.Split('\\').Last()}\t{w.AudioLength}";
+            lock (LockObj)
+            {
+                ReportList.Add(reportLine);
+            }
         }
 
         public override string ItemRename(string inputItemName)
@@ -65,6 +83,11 @@ namespace OfflineAudioProcessingSystem.AudioTransfer
             int i = inputItemName.LastIndexOf('.');
             string prefix = inputItemName.Substring(0, i);
             return $"{prefix}.wav";
+        }
+
+        protected override void PostRun()
+        {
+            File.WriteAllLines(ReportPath, ReportList);
         }
     }
 }

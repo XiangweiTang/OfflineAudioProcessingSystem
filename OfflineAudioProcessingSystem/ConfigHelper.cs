@@ -41,12 +41,16 @@ namespace OfflineAudioProcessingSystem
             {
                 if (!File.Exists(configPath))
                     PrintConfig();
-                Config cfg = new Config();
+                Config cfg = new Config();                
                 cfg.Load(configPath);
                 Init(cfg);
                 var feature = GetFeature(cfg.TaskName);
                 if (feature != null)
+                {
+                    Logger.WriteLine($"You're going to run {feature.GetFeatureName()}. Press any key to continue.");
+                    Console.ReadKey();
                     feature.LoadAndRun(configPath);
+                }
             }
             catch (CommonException e)
             {
@@ -68,6 +72,8 @@ namespace OfflineAudioProcessingSystem
                     return null;
                 case "helloworld":
                     return new HelloWorld.HelloWorld();
+                case "audiotransfer":
+                    return new AudioTransfer.AudioTransfer();
                 default:
                     throw new CommonException($"Invalid task name {featureName}.");
             }

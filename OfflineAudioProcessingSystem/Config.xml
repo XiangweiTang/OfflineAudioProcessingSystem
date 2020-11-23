@@ -3,6 +3,12 @@
   <HelloWorld>
     <Name>Bobo</Name>
   </HelloWorld>
+  <AudioTransfer>
+    <InputFolder Path="D:\Tmp\Basel 18.11. 2020 S"/>
+    <OutputFolder Path="D:\Tmp\Basel 18.11. 2020 S_Update"/>
+    <ReportFile Path="D:\Tmp\Basel 18.11. 2020 S.txt"/>
+    <AudioSettings SampleRate="16000" NumChannels="1"/>
+  </AudioTransfer>
   <Common>
     <Sox Path="C:\Program Files (x86)\sox-14-4-2\sox.exe"/>
     <Ffmpeg Path="D:\AutomationSystem\ExternalTools\ffmpeg.exe"/>
