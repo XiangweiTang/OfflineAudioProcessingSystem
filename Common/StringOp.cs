@@ -13,6 +13,11 @@ namespace Common
             return dt.ToString("yyyy-MM-dd hh:mm:ss.fff");
         }
 
+        public static string ToStringPathLong(this DateTime dt)
+        {
+            return dt.ToString("yyyyMMdd_hhmmss");
+        }
+
         public static string WrapPath(this string path)
         {
             char c0 = path[0];
