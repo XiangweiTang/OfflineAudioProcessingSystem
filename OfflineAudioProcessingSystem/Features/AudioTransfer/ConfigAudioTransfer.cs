@@ -12,6 +12,8 @@ namespace OfflineAudioProcessingSystem.AudioTransfer
         public string InputPath { get; private set; } = @"D:\Tmp\Basel 18.11. 2020 S";
         public string OutputPath { get; private set; } = @"D:\Tmp\Basel 18.11. 2020 S_Update";
         public string ReportPath { get; private set; } = @"D:\Tmp\Basel 18.11. 2020 S.txt";
+        public string ExistringFileListPath { get; private set; } = @"";
+        public string ErrorPath { get; private set; } = @"";
         public int SampleRate { get; private set; } = 16000;
         public int NumChannels { get; private set; } = 1;
         protected override void LoadTaskNode()
