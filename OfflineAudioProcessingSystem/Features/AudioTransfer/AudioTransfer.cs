@@ -69,7 +69,7 @@ namespace OfflineAudioProcessingSystem.AudioTransfer
                 .ToHashSet();
             ExistingFileDict = File.ReadLines(ExistingFileListPath)
                 .GroupBy(x => x.Split('\t')[0])
-                .ToDictionary(x => x.Key, x => x.ToList());
+                .ToDictionary(x => x.Key, x => x.Select(y=>y.Split('\t')[1]).ToList());
         }
         protected override void ItemTransfer(string inputPath, string outputPath)
         {
