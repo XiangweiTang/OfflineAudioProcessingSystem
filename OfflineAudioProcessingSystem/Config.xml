@@ -1,12 +1,11 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
-<Root TaskName="NA">
+<Root TaskName="AudioTransfer">
   <HelloWorld>
     <Name>Bobo</Name>
   </HelloWorld>
   <AudioTransfer>
-    <InputFolder Path="D:\Tmp\Basel 18.11. 2020 S"/>
-    <OutputFolder Path="D:\Tmp\Basel 18.11. 2020 S_Update"/>
-    <ReportFile Path="D:\Tmp\Basel 18.11. 2020 S.txt"/>
+    <InputFolder Path="D:\Tmp\Zürich 14.12.2020"/>
+    <OutputFolder Path="D:\WorkFolder\Input\300hrsRecordingContent\Zurich\"/>
     <AudioSettings SampleRate="16000" NumChannels="1"/>
   </AudioTransfer>
   <Common>
