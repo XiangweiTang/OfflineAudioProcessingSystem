@@ -30,6 +30,8 @@ namespace Common
         private const string WAVE = "WAVE";
         private const string FORMAT = "fmt ";
         private const string DATA = "data";
+        // This is the number of sample, not number of bytes.
+        private const int BUFFER_SIZE = 10_000;
 
         private bool IsDeep = false;
         public WaveChunk FormatChunk { get; private set; }= new WaveChunk { Name = "", Length = -1, Offset = -1 };
@@ -169,6 +171,55 @@ namespace Common
                 totalSamples++;
             }
             _RMS = Math.Sqrt((double)totalSampleEnergy / totalSamples) / divisor;
+        }
+
+        private void PostCheckDataChunkBlock(FileStream fs)
+        {
+            fs.Seek(DataChunk.Offset + 8, SeekOrigin.Begin);
+            byte[] buffer = new byte[BitsPerSample / 8 * BUFFER_SIZE];
+            Func<byte[], int, long> readSquareSum = null;
+            switch (BitsPerSample)
+            {
+                case 8:
+                    readSquareSum = ReadBytesSquareSum;
+                    break;
+                case 16:
+                    readSquareSum = ReadShortsSquareSum;
+                    break;
+                default:
+                    break;
+            }
+            Sanity.Requires(readSquareSum != null, $"Unsupported bits per sample: {BitsPerSample}");
+            long l = 0;
+            int totalSamples = 0;
+            while (fs.Position < fs.Length)
+            {
+                int n = fs.Read(buffer, 0, buffer.Length);
+                l += readSquareSum(buffer, n);
+                totalSamples += n;
+            }
+            _RMS = Math.Sqrt((double)l / totalSamples);
+        }
+
+        private long ReadBytesSquareSum(byte[] bytes, int n)
+        {
+            long l = 0;
+            for(int i = 0; i < n; i++)
+            {
+                l += bytes[i] * bytes[i];
+            }
+            return l;
+        }
+
+        private long ReadShortsSquareSum(byte[] bytes, int n)
+        {
+            long l = 0;
+            for(int i = 0; i < n; i += 2)
+            {
+                short s = BitConverter.ToInt16(bytes, i);
+                l += s * s;
+            }
+            return l;
         }
     }
 
