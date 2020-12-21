@@ -20,12 +20,12 @@ namespace OfflineAudioProcessingSystem
         {
             RunFile.Run(SoxPath, arguments, false, "");
         }
-        public static void CutAudio(string inputAudioPath, object startTime, object duration, string outputAudioPath)
+        public static void CutAudioWithSox(string inputAudioPath, object startTime, object duration, string outputAudioPath)
         {
             string arguments = $"{inputAudioPath} {outputAudioPath} trim {startTime} {duration}";
             RunSox(arguments);
         }
-        public static void MergeAudio(IEnumerable<string> inputAudioList, string outputAudioPath, string listPath)
+        public static void MergeAudioWithFfmpeg(IEnumerable<string> inputAudioList, string outputAudioPath, string listPath)
         {
             var list = inputAudioList.Select(x => $"file '{x}'");
             File.WriteAllLines(listPath, list);
@@ -34,10 +34,16 @@ namespace OfflineAudioProcessingSystem
             RunFfmpeg(arguments);
         }
 
-        public static void SetAudio(string inputAudioPath, int sampleRate, int channelNumber , string outputAudioPath)
+        public static void SetAudioWithFfmpeg(string inputAudioPath, int sampleRate, int channelNumber , string outputAudioPath)
         {
             string arguments = $"-i {inputAudioPath} -ar {sampleRate} -ac {channelNumber} {outputAudioPath}";
             RunFfmpeg(arguments);
+        }
+
+        public static void SetAudioWithSox(string inputAudioPath, int sampleRate, int channelNumber, string outputAudioPath)
+        {
+            string arguments = $"{inputAudioPath} -r {sampleRate} -c {channelNumber} {outputAudioPath}";
+            RunSox(arguments);
         }
     }
 }

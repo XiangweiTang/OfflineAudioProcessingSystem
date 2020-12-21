@@ -12,9 +12,12 @@ namespace OfflineAudioProcessingSystem
     {
         public Test(string[] args)
         {
-            string w1 = @"D:\WorkFolder\Input\300hrsRecordingContent\Zurich\Zürich 14.12.2020\Zürich+38+FEMALE+27.wav";
-            string w2 = @"D:\WorkFolder\Input\300hrsRecordingContent\Zurich\Zürich 13.12.2020 F\Zürich+16+FEMALE+27.wav";
-            var b=CompareWaves(w1, w2);
+            //string w1 = @"D:\WorkFolder\Input\300hrsRecordingContent\Zurich\Zürich 14.12.2020\Zürich+38+FEMALE+27.wav";
+            //string w2 = @"D:\WorkFolder\Input\300hrsRecordingContent\Zurich\Zürich 13.12.2020 F\Zürich+16+FEMALE+27.wav";
+            //AudioTransfer.AudioFolderTransfer aft = new AudioTransfer.AudioFolderTransfer("", "", "");
+            //var r = aft.AudioCompareBlock(w1, w2);            
+            //Wave w = new Wave();
+            //w.ShallowParse(@"D:\Tmp\Basel 12.12.2020 Valentin\Basel+Va001+Male+.wav");
         }
 
         private void GenerateRecords()
