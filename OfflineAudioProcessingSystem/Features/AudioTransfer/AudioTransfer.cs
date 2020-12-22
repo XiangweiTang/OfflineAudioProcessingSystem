@@ -23,7 +23,9 @@ namespace OfflineAudioProcessingSystem.AudioTransfer
 
         protected override void Run()
         {
-            var aft = new AudioFolderTransfer(Cfg.ReportPath, Cfg.ExistringFileListPath, Cfg.ErrorPath)
+            string waveWorkFolder = Path.Combine(WorkFolder, "Wave");
+            Directory.CreateDirectory(waveWorkFolder);
+            var aft = new AudioFolderTransfer(Cfg.ReportPath, Cfg.ExistringFileListPath, Cfg.ErrorPath, waveWorkFolder)
             {
                 SampleRate = Cfg.SampleRate,
                 NumChannels = Cfg.NumChannels,
@@ -36,7 +38,8 @@ namespace OfflineAudioProcessingSystem.AudioTransfer
             }
             else if (File.Exists(Cfg.InputPath))
             {
-                aft.ConvertToWave(Cfg.InputPath, Cfg.OutputPath);
+                string intermediaPath = Path.Combine(waveWorkFolder, Guid.NewGuid() + ".wav");
+                aft.ConvertToWave(Cfg.InputPath, intermediaPath, Cfg.OutputPath);
             }
             else
                 throw new CommonException($"Missing input path: {Cfg.InputPath}");
@@ -56,11 +59,13 @@ namespace OfflineAudioProcessingSystem.AudioTransfer
         private Dictionary<string, List<string>> ExistingFileDict = new Dictionary<string, List<string>>();
         private string ExistingFileListPath = "";
         private List<string> NewFileList = new List<string>();
-        public AudioFolderTransfer(string reportPath, string existingFileListPath, string errorPath) : base()
+        private string WorkFolder = "";
+        public AudioFolderTransfer(string reportPath, string existingFileListPath, string errorPath, string workFolder) : base()
         {
             ReportPath = reportPath;
             ExistingFileListPath = existingFileListPath;
             ErrorPath = errorPath;
+            WorkFolder = workFolder;
         }
         protected override void PreRun()
         {
@@ -73,77 +78,66 @@ namespace OfflineAudioProcessingSystem.AudioTransfer
         }
         protected override void ItemTransfer(string inputPath, string outputPath)
         {
-            string ext = inputPath.Split('.').Last().ToLower();
-            Sanity.Requires(ValidExtSet.Contains(ext), $"Invalid extension: {ext}");
-            ConvertToWave(inputPath, outputPath);
-            Wave w = new Wave();
-            w.ShallowParse(outputPath);
-            string reportLine = $"{inputPath.Split('\\').Last()}\t{outputPath.Split('\\').Last()}\t{w.AudioLength}";
-            string key = w.DataChunk.Length.ToString();
-            lock (LockObj)
+            string intermediaPath = Path.Combine(WorkFolder, Guid.NewGuid() + ".wav");
+            try
             {
-                if (ExistingFileDict.ContainsKey(key))
+                string ext = inputPath.Split('.').Last().ToLower();
+                Sanity.Requires(ValidExtSet.Contains(ext), $"Invalid extension: {ext}");
+                ConvertToWave(inputPath, intermediaPath, outputPath);
+                Wave w = new Wave();
+                w.ShallowParse(outputPath);
+                string reportLine = $"{inputPath.Split('\\').Last()}\t{outputPath.Split('\\').Last()}\t{w.AudioLength}";
+                string key = w.DataChunk.Length.ToString();
+                lock (LockObj)
                 {
-                    foreach (string existingFilePath in ExistingFileDict[key])
+                    if (ExistingFileDict.ContainsKey(key))
                     {
-                        if (AudioCompare(existingFilePath, outputPath))
-                        {
-                            ErrorList.Add($"{outputPath}\t{existingFilePath}");
-                            return;
+                        foreach (string existingFilePath in ExistingFileDict[key])
+                        {                            
+                            if (LocalCommon.AudioIdentical(existingFilePath, outputPath))
+                            {
+                                ErrorList.Add($"{outputPath}\t{existingFilePath}");
+                                if (File.Exists(outputPath))
+                                    File.Delete(outputPath);
+                                return;
+                            }
                         }
+                        ExistingFileDict[key].Add(outputPath);
                     }
-                    ExistingFileDict[key].Add(outputPath);
+                    else
+                        ExistingFileDict[key] = new List<string> { outputPath };
+                    ReportList.Add(reportLine);
+                    NewFileList.Add($"{key}\t{outputPath}");
+                    if (File.Exists(intermediaPath))
+                        File.Delete(intermediaPath);
                 }
-                else
-                    ExistingFileDict[key] = new List<string> { outputPath };
-                ReportList.Add(reportLine);
-                NewFileList.Add($"{key}\t{outputPath}");
             }
-        }
-
-        public void ConvertToWave(string inputPath, string outputPath)
-        {
-            LocalCommon.SetAudioWithFfmpeg(inputPath.WrapPath(), SampleRate, NumChannels, outputPath.WrapPath());
-            if (!File.Exists(outputPath))
-                LocalCommon.SetAudioWithSox(inputPath.WrapPath(), SampleRate, NumChannels, outputPath.WrapPath());
-        }
-
-        public bool AudioCompare(string waveFilePath1, string waveFilePath2)
-        {
-            Wave w1 = new Wave();
-            w1.ShallowParse(waveFilePath1);
-            Wave w2 = new Wave();
-            w2.ShallowParse(waveFilePath1);
-            using(FileStream fs1=new FileStream(waveFilePath1,FileMode.Open,FileAccess.Read))
-            using(FileStream fs2=new FileStream(waveFilePath2, FileMode.Open, FileAccess.Read))
+            catch(CommonException e)
             {
-                fs1.Seek(w1.DataChunk.Offset + 8, SeekOrigin.Begin);
-                fs2.Seek(w2.DataChunk.Offset + 8, SeekOrigin.Begin);
-                byte[] buffer1 = new byte[BUFFER_SIZE];
-                byte[] buffer2 = new byte[BUFFER_SIZE];
-                while (fs1.Position < fs1.Length)
-                {
-                    int count = Math.Min(BUFFER_SIZE, (int)(fs1.Length - fs1.Position));
-                    try
-                    {
-                        fs1.Read(buffer1, 0, BUFFER_SIZE);
-                        fs2.Read(buffer2, 0, BUFFER_SIZE);
-                        if (buffer1.SequenceEqual(buffer2))
-                            continue;
-                        return false;
-                    }
-                    catch
-                    {
-                        return false;
-                    }
-                }
-                return true;
+                string errorMessage = $"{inputPath}\t{e.Message}";
+                ErrorList.Add(errorMessage);
+                Logger.WriteLineWithLock(errorMessage);
+                if (File.Exists(intermediaPath))
+                    File.Delete(intermediaPath);
+                if (File.Exists(outputPath))
+                    File.Delete(outputPath);
             }
         }
+
+        public void ConvertToWave(string inputPath, string interMediaPath, string outputPath)
+        {
+            LocalCommon.SetAudioToWaveWithFfmpeg(inputPath.WrapPath(), interMediaPath.WrapPath());
+            Wave w = new Wave();
+            w.ShallowParse(interMediaPath);
+            Sanity.Requires(w.SampleRate >= SampleRate, w.SampleRate.ToString());
+            File.Delete(interMediaPath);
+            LocalCommon.SetAudioWithFfmpeg(inputPath.WrapPath(), SampleRate, NumChannels, outputPath.WrapPath());            
+        }
+
         public override string ItemRename(string inputItemName)
         {
             FileInfo file = new FileInfo(inputItemName);
-            return file.Name.Replace(file.Extension, "wav");
+            return file.Name.Replace(file.Extension, ".wav");
         }
 
         protected override void PostRun()
