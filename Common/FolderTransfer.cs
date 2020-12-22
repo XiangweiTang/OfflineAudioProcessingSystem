@@ -35,9 +35,9 @@ namespace Common
                      {
                          ItemTransfer(inputItemPath, outputItemPath);
                      }
-                     catch(CommonException e)
+                     catch(Exception e)
                      {
-                         Logger.WriteLine(e.Message, true, true);
+                         Logger.WriteLineWithLock(e.Message, true, true);
                      }
                  });
 

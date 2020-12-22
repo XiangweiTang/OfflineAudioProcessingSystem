@@ -10,7 +10,7 @@ namespace OfflineAudioProcessingSystem
 {
     abstract class Feature
     {        
-        private string WorkFolder = "";        
+        protected string WorkFolder { get; private set; } = "";        
         public void LoadAndRun(string configPath)
         {
             Preset();

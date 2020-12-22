@@ -11,6 +11,7 @@ namespace Common
     {
         public static string LogPath { get; set; } = "Log.txt";
         public static string ErrorPath { get; set; } = "Error.txt";
+        private static object LockObj = new object();
         public static void WriteLine(string content, bool inLog=true, bool inError=false)
         {
             DateTime dt = DateTime.Now;
@@ -20,6 +21,14 @@ namespace Common
                 File.AppendAllLines(LogPath, s.ToSequence());
             if (inError)
                 File.AppendAllLines(ErrorPath, s.ToSequence());
+        }
+
+        public static void WriteLineWithLock(string content, bool inLog=true, bool inError = false)
+        {
+            lock (LockObj)
+            {
+                WriteLine(content, inLog, inError);
+            }
         }
     }
 }
