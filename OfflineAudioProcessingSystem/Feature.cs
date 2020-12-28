@@ -19,15 +19,18 @@ namespace OfflineAudioProcessingSystem
         }
         public void TestRun()
         {
+            string id = $"{DateTime.Now.ToString("yyyyMMdd_hhmmss")}_{GetType().Name}";
+            Logger.ErrorPath = Path.Combine("tmp", id + ".error");
+            Logger.LogPath = Path.Combine("tmp", id + ".log");
             Run();
         }
-        public abstract string GetFeatureName();
+        //public abstract string GetFeatureName();
         protected abstract void LoadConfig(string configPath);
         protected abstract void Run();
 
         private void Preset()
         {
-            WorkFolder = Path.Combine("Tmp", $"{DateTime.Now.ToStringPathLong()}_{GetFeatureName()}");            
+            WorkFolder = Path.Combine("Tmp", $"{DateTime.Now.ToStringPathLong()}_{GetType().Name}");
             Directory.CreateDirectory(WorkFolder);
 
             Logger.LogPath = Path.Combine(WorkFolder, "Log.txt");

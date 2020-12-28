@@ -9,12 +9,6 @@ namespace OfflineAudioProcessingSystem.HelloWorld
     class HelloWorld:Feature
     {
         ConfigHelloWorld Cfg = new ConfigHelloWorld();
-
-        public override string GetFeatureName()
-        {
-            return "HelloWorld";
-        }
-
         protected override void LoadConfig(string configPath)
         {
             Cfg.Load(configPath);
