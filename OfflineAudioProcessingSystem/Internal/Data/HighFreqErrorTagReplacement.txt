@@ -1,0 +1,11 @@
+﻿<SN>	<SN/>
+<UNKNOWN>	<UNKNOWN/>
+<comma >	<comma>
+<comma 	<comma>
+<chdialects-converted<	<chdialects-converted><
+<chdialects-converted 	<chdialects-converted>
+<chdialects-converted >	<chdialects-converted>
+<FILL/ >	<FILL/>
+<FILL>	<FILL/>
+<FILL/ 	<FILL/>
+<fullstop 	<fullstop>

@@ -47,7 +47,7 @@ namespace OfflineAudioProcessingSystem
                 var feature = GetFeature(cfg.TaskName);
                 if (feature != null)
                 {
-                    Logger.WriteLine($"You're going to run {feature.GetFeatureName()}. Press any key to continue.");
+                    Logger.WriteLine($"You're going to run {feature.GetType().Name}. Press any key to continue.");
                     Console.ReadKey();
                     feature.LoadAndRun(configPath);
                 }

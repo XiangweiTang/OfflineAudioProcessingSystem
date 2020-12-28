@@ -11,39 +11,59 @@ namespace OfflineAudioProcessingSystem.AudioTransfer
     class AudioTransfer : Feature
     {
         ConfigAudioTransfer Cfg = new ConfigAudioTransfer();
-        public override string GetFeatureName()
-        {
-            return "AudioTransfer";
-        }
-
+        Dictionary<string, string> Dict = new Dictionary<string, string>();
         protected override void LoadConfig(string configPath)
         {
             Cfg.Load(configPath);
         }
-
+        private void GetNamingDict()
+        {
+            Dict = IO.ReadEmbed($"{LocalConstants.LOCAL_ASMB_NAME}.Internal.Data.FolderNameMapping.txt", LocalConstants.LOCAL_ASMB_NAME)
+                .ToDictionary(x => x.Split('\t')[0], x => x.Split('\t')[1]);
+        }
         protected override void Run()
         {
-            string waveWorkFolder = Path.Combine(WorkFolder, "Wave");
-            Directory.CreateDirectory(waveWorkFolder);
-            var aft = new AudioFolderTransfer(Cfg.ReportPath, Cfg.ExistringFileListPath, Cfg.ErrorPath, waveWorkFolder)
+            GetNamingDict();
+            TransferFromAzureToAzure(AzureUtils.SetDataUri(Cfg.InputPath), Cfg.OutputPath);
+        }       
+        
+        private void TransferFromAzureToAzure(string inputAzureUri, string outputAzureRootUri)
+        {
+            var split = inputAzureUri.Trim('/').Split('/');
+            string subFolderName = split.Last().Trim();
+            string locale = Dict[split[split.Length - 2]];
+            string downloadFolder = Path.Combine(WorkFolder, "Wave", subFolderName, "Download");
+            string intermediaFolder = Path.Combine(WorkFolder, "Wave", subFolderName, "Intermedia");
+            string uploadFolder = Path.Combine(Cfg.AudioRootFolder, locale, subFolderName);
+            Directory.CreateDirectory(downloadFolder);
+            Directory.CreateDirectory(intermediaFolder);
+            Directory.CreateDirectory(uploadFolder);
+            foreach(string azureFileName in AzureUtils.ListBlobs(inputAzureUri))
+            {
+                string fileName = azureFileName.Split('/').Last();
+                string localPath = Path.Combine(downloadFolder, fileName);
+                AzureUtils.Download(azureFileName, localPath);
+            }
+
+            string reportFolderPath = Path.Combine(Cfg.ReportRootFolder, "_Report", subFolderName);
+            Directory.CreateDirectory(reportFolderPath);
+            string reportPath = Path.Combine(reportFolderPath, "Report.txt");
+            string errorPath = Path.Combine(reportFolderPath, "Error.txt");
+            AudioFolderTransfer aft = new AudioFolderTransfer(reportPath, Cfg.ExistringFileListPath, errorPath, intermediaFolder)
             {
                 SampleRate = Cfg.SampleRate,
                 NumChannels = Cfg.NumChannels,
                 MaxParallel = 5
             };
-            if (Directory.Exists(Cfg.InputPath))
-            {
+            aft.Run(downloadFolder, uploadFolder);
 
-                aft.Run(Cfg.InputPath, Cfg.OutputPath);
-            }
-            else if (File.Exists(Cfg.InputPath))
+            foreach(string localFilePath in Directory.EnumerateFiles(uploadFolder))
             {
-                string intermediaPath = Path.Combine(waveWorkFolder, Guid.NewGuid() + ".wav");
-                aft.ConvertToWave(Cfg.InputPath, intermediaPath, Cfg.OutputPath);
+                string fileName = localFilePath.Split('\\').Last();
+                string uploadFileName = AzureUtils.PathCombine(outputAzureRootUri, locale, subFolderName, fileName);
+                AzureUtils.Upload(localFilePath, uploadFileName);
             }
-            else
-                throw new CommonException($"Missing input path: {Cfg.InputPath}");
-        }        
+        }
     }
 
     class AudioFolderTransfer : FolderTransfer

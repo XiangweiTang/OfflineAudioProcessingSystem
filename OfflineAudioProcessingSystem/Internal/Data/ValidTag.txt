@@ -1,0 +1,13 @@
+﻿<FILL/>
+<UNKNOWN/>
+<SN/>
+<CNOISE/>
+<OVERLAP>
+<OVERLAP/>
+<questionmark>
+<comma>
+<fullstop>
+<chdialects>
+<chdialects/>
+<chdialects-converted>
+<chdialects-converted/>

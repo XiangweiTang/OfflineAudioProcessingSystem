@@ -1,0 +1,7 @@
+﻿St.Gallen	St. Gallen
+Luzern	Luzern
+Bern	Bern
+Chur	Chur
+Basel	Basel
+Visp	Visp
+Zurich	Zurich
