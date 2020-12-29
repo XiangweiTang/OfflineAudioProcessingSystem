@@ -12,9 +12,7 @@ namespace OfflineAudioProcessingSystem
     {
         public Test(string[] args)
         {
-            Wave w = new Wave();
-            string uriString = @"https://marksystemapistorage.blob.core.windows.net/chdatacollections/300hrsRecordingContent/Basel1/";
-            var r = AzureUtils.ListDirectories(uriString);
+            TranscriptValidation.NewTransValidation nt = new TranscriptValidation.NewTransValidation();
         }
         private void ProcessingAudios(string folderPath, string errorPath)
         {

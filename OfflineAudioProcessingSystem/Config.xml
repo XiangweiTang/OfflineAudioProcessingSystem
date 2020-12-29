@@ -4,7 +4,7 @@
     <Name>Bobo</Name>
   </HelloWorld>
   <AudioTransfer>
-    <InputFolder Path="300hrs data acquisition/St.Gallen/newSystemCompleteData/"/>
+    <InputFolder Path="300hrs data acquisition/Bern/Bern 28.12.2020 Melinda/"/>
     <OutputFolder Path="https://marksystemapistorage.blob.core.windows.net/chdatacollections/300hrsRecordingContent/"/>
     <AudioSettings SampleRate="16000" NumChannels="1"/>
   </AudioTransfer>

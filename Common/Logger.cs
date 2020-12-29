@@ -14,6 +14,8 @@ namespace Common
         private static object LockObj = new object();
         public static void WriteLine(string content, bool inLog=true, bool inError=false)
         {
+            if (content == "Index was outside the bounds of the array.")
+                ;
             DateTime dt = DateTime.Now;
             string s = $"{dt.ToStringLog()}\t{content}";
             Console.WriteLine(s);
