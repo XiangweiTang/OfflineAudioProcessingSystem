@@ -10,21 +10,21 @@ namespace Common
 {
     public static class IO
     {
-        public static string ReadStringFromFileStream(this FileStream fs, Encoding encoding, int count)
+        public static string ReadStringFromFileStream(this Stream fs, Encoding encoding, int count)
         {
             byte[] buffer = new byte[count];
             fs.Read(buffer, 0, count);
             return encoding.GetString(buffer);
         }
 
-        public static int ReadIntFromFileStream(this FileStream fs)
+        public static int ReadIntFromFileStream(this Stream fs)
         {
             byte[] buffer = new byte[4];
             fs.Read(buffer, 0, 4);
             return BitConverter.ToInt32(buffer, 0);
         }
 
-        public static short ReadShortFromFileStream(this FileStream fs)
+        public static short ReadShortFromFileStream(this Stream fs)
         {
             byte[] buffer = new byte[2];
             fs.Read(buffer, 0, 2);

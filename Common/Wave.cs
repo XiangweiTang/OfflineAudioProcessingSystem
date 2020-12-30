@@ -45,7 +45,7 @@ namespace Common
                 ShallowParse(fs);
             }
         }
-        public void ShallowParse(FileStream fs)
+        public void ShallowParse(Stream fs)
         {
             IsDeep = false;
             ParseWave(fs);
@@ -63,7 +63,7 @@ namespace Common
             IsDeep = true;
             ParseWave(fs);
         }
-        private void ParseWave(FileStream fs)
+        private void ParseWave(Stream fs)
         {
             Sanity.Requires(fs.Length >= 44, "Invalid wave file, size too small.");
             Sanity.Requires(fs.Length <= int.MaxValue, "Invalid wave file, size too big.");
@@ -82,7 +82,7 @@ namespace Common
             PostCheck(fs);
         }
 
-        private void ParseRecursively(FileStream fs)
+        private void ParseRecursively(Stream fs)
         {
             if (fs.Position == fs.Length)
                 return;
@@ -118,7 +118,7 @@ namespace Common
             ParseRecursively(fs);
         }
 
-        private void PostCheck(FileStream fs)
+        private void PostCheck(Stream fs)
         {
             Sanity.Requires(!string.IsNullOrEmpty(FormatChunk.Name), "Invalid wave file, missing format chunk.");
             Sanity.Requires(!string.IsNullOrEmpty(DataChunk.Name), "Invalid wave file, missing data chunk.");
@@ -127,7 +127,7 @@ namespace Common
                 PostCheckDataChunk(fs);
         }
 
-        private void PostCheckFormatChunk(FileStream fs)
+        private void PostCheckFormatChunk(Stream fs)
         {
             fs.Seek(FormatChunk.Offset, SeekOrigin.Begin);
             WaveType = fs.ReadShortFromFileStream();
@@ -143,13 +143,13 @@ namespace Common
             AudioLength = (double)DataChunk.Length / ByteRate;
         }
 
-        private void PostCheckDataChunk(FileStream fs)
+        private void PostCheckDataChunk(Stream fs)
         {
             fs.Seek(DataChunk.Offset, SeekOrigin.Begin);
             long totalSampleEnergy = 0;
             int totalSamples = 0;
             int divisor = 0;
-            Func<FileStream, int> GetSampleValue = null;
+            Func<Stream, int> GetSampleValue = null;
             switch (BitsPerSample)
             {
                 case 8:
@@ -173,7 +173,7 @@ namespace Common
             _RMS = Math.Sqrt((double)totalSampleEnergy / totalSamples) / divisor;
         }
 
-        private void PostCheckDataChunkBlock(FileStream fs)
+        private void PostCheckDataChunkBlock(Stream fs)
         {
             fs.Seek(DataChunk.Offset + 8, SeekOrigin.Begin);
             byte[] buffer = new byte[BitsPerSample / 8 * BUFFER_SIZE];
