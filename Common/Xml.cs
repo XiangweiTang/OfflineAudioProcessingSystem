@@ -18,7 +18,15 @@ namespace Common
                 ? subNode.InnerText
                 : subNode.Attributes[attribute].Value;
         }
-
+        public static IEnumerable<string> GetXmlValues(this XmlNode rootNode, string xPath, string attribute = "")
+        {
+            Sanity.Requires(rootNode != null, "The root node is null.");
+            var subNodes = rootNode.SelectNodes(xPath)
+                .Cast<XmlNode>();
+            return string.IsNullOrEmpty(attribute)
+                ? subNodes.Select(x => x.InnerText)
+                : subNodes.Select(x => x.Attributes[attribute].Value);
+        }
         public static int GetXmlValueInt32(this XmlNode rootNode, string xpath, string attribute = "")
         {
             string s = rootNode.GetXmlValue(xpath, attribute);

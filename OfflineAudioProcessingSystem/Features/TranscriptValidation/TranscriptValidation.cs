@@ -9,323 +9,68 @@ using System.Text.RegularExpressions;
 
 namespace OfflineAudioProcessingSystem.TranscriptValidation
 {
-    class TranscriptValidation:Feature
+    class TranscriptValidation
     {
-        ConfigTranscriptValidation Cfg = new ConfigTranscriptValidation();
-        protected override void LoadConfig(string configPath)
-        {
-            Cfg.Load(configPath);
-        }
-
-        protected override void Run()
-        {
-            TranscriptsTransfer tt = new TranscriptsTransfer("char.txt");
-            tt.Run(@"D:\WorkFolder\Transcripts\20201224\Input", @"D:\WorkFolder\Transcripts\20201224\Output");
-        }
-    }
-
-    class TranscriptsTransfer : FolderTransfer
-    {
-        Regex LineReg = new Regex("(^(s|S)[0-9]+)(.*)$", RegexOptions.Compiled);
-        Regex TagReg = new Regex("<.*?>", RegexOptions.Compiled);
-        HashSet<string> ValidRegSet = new HashSet<string>();
-        (string, string)[] HighFreqReplacements = new (string, string)[0];
-        List<string> InvalidTags = new List<string>();
-        HashSet<char> CharSet = new HashSet<char>();
-        string CharPath = "";
-        public TranscriptsTransfer(string charPath) : base()
-        {
-            CharPath = charPath;
-        }
-        protected override void PreRun()
-        {
-            ValidRegSet = IO.ReadEmbed("OfflineAudioProcessingSystem.Internal.Data.ValidTag.txt", "OfflineAudioProcessingSystem").ToHashSet();
-            HighFreqReplacements = IO.ReadEmbed("OfflineAudioProcessingSystem.Internal.Data.HighFreqErrorTagReplacement.txt", "OfflineAudioProcessingSystem")
-                .Select(x=>(x.Split('\t')[0],x.Split('\t')[1]))
-                .ToArray();
-        }
-        protected override IEnumerable<string> GetItems(string inputFolderPath)
-        {
-            return Directory.EnumerateFiles(inputFolderPath, "*.txt");
-        }
-        protected override void ItemTransfer(string inputPath, string outputPath)
-        {
-            if (File.Exists(outputPath))
-                File.Delete(outputPath);
-            FileInfo file = new FileInfo(inputPath);
-            string wavePath = file.FullName.Replace(file.Extension, ".wav");
-            try
-            {
-                ProcessFile(inputPath, wavePath, outputPath);
-                if (File.Exists(outputPath))
-                {
-                    FileInfo outputFile = new FileInfo(outputPath);
-                    string outputWavePath = outputFile.FullName.Replace(file.Extension, ".wav");
-                    //File.Copy(wavePath, outputWavePath);
-                }
-            }
-            catch(CommonException e)
-            {
-                Logger.WriteLineWithLock(e.Message, false, true);
-            }
-        }
-
-        private void ProcessFile(string transPath, string wavPath, string outputFilePath)
-        {
-            List<TranscriptionLine> list = new List<TranscriptionLine>();
-            double maxEnd = -1;
-            var transcriptContent = File.ReadAllLines(transPath);
-            //Sanity.Requires(transcriptContent.Length > 0, $"Empty file\t{transPath}");
-            if (transcriptContent.Length == 0)
-                return;
-            foreach (string s in transcriptContent)
-            {
-                string timeStamp="";
-                try
-                {                    
-                    var line = StringToTransLine(s, out timeStamp);
-                    if (line.TS.EndTime > maxEnd)
-                        maxEnd = line.TS.EndTime;
-                    list.Add(line);
-                }
-                catch(CommonException e)
-                {
-                    if (e.Message != "")
-                        Logger.WriteLineWithLock(string.Join("\t", e.Message, timeStamp, transPath), false, true);
-                    if (e.Message[0] == '*')
-                        return;
-                }
-            }
-            Wave w = new Wave();
-            w.ShallowParse(wavPath);
-            //Sanity.Requires(maxEnd > 0, $"Audio length error\t{transPath}");
-            Sanity.Requires(maxEnd > 0, $"");
-            if (w.AudioLength/maxEnd >= 2)
-            {
-                //Sanity.Requires(w.AudioLength - maxEnd <= 10, $"Audio length error\t{transPath}");
-                Sanity.Requires(w.AudioLength - maxEnd <= 10, $"");
-            }
-            ValidatePair(list, transPath);
-            File.WriteAllLines(outputFilePath, list.Select(x => x.Output()));
-        }
-
-        private TranscriptionLine StringToTransLine(string s, out string timeStamp)
-        {
-            //Sanity.Requires(s[0] == '[', "*Not start with '['.");
-            //Sanity.Requires(s.Contains(']'), "*No right bracket ']' inside.");
-            Sanity.Requires(s[0] == '[', "");
-            Sanity.Requires(s.Contains(']'), "");
-            TranscriptionLine line = new TranscriptionLine();
-            line.Sep = ' ';
-            string timeStampString = s.Substring(0, s.IndexOf(']') + 1);
-            TimeStamp ts = new TimeStamp(timeStampString);
-            line.TS = ts;
-            timeStamp = ts.ToString();
-            string tail = s.Substring(s.IndexOf(']') + 1).Trim();
-            if (string.IsNullOrEmpty(tail))
-            {
-                line.SpeakerId = "";
-                line.Content = "";
-                return line;
-            }
-            if (!LineReg.IsMatch(tail))
-            {
-                line.SpeakerId = "S1";
-                line.Content = tail;
-            }
-            else
-            {
-                line.SpeakerId = LineReg.Match(tail).Groups[1].Value;
-                line.Content = LineReg.Match(tail).Groups[3].Value.Trim();
-            }
-
-            line.Content = ReplaceHighFreq(line.Content);
-            string fixedContent;
-            Sanity.Requires(DialectTag(line.Content,out fixedContent) != 0, "*Missing dialect tags.");
-            line.Content = fixedContent;
-            if (string.IsNullOrWhiteSpace(line.Content))
-                ;
-            var tags = TagReg.Matches(line.Content).Cast<Match>().Select(x => x.Groups[0].Value);
-            var extra = tags.Except(ValidRegSet).ToArray();
-
-            Sanity.Requires(extra.Length == 0, $"Invalid tags {string.Join(" ", extra)}");
-
-            string rawContent = TagReg.Replace(line.Content, "");
-            bool valid = !rawContent.Contains('<') && !rawContent.Contains('>');
-            if (!valid)
-                ;
-            Sanity.Requires(valid, "Incomplete tags.");
-
-            return line;
-        }
-        private int DialectTag(string s, out string outputString)
-        {
-            outputString = s;
-            if (s.StartsWith("<chdialects>") && s.EndsWith("<chdialects/>"))
-            {
-                return 1;
-            }
-            if (s.StartsWith("<chdialects-converted>") && s.EndsWith("<chdialects-converted/>"))
-            {
-                return -1;
-            }
-            if (s.StartsWith("<chdialects>"))
-            {
-                outputString = $"{s}<chdialects/>";
-                return 1;
-            }
-            if (s.StartsWith("<chdialects-converted>"))
-            {
-                outputString = $"{s}<chdialects-converted/>";
-                return -1;
-            }
-            return 0;
-        }
-
-        private string ReplaceHighFreq(string s)
-        {
-            foreach(var replacement in HighFreqReplacements)
-            {
-                s = s.Replace(replacement.Item1, replacement.Item2);
-            }
-            return s;
-        }
-
-        protected override void PostRun()
-        {
-            File.WriteAllLines(CharPath, CharSet.OrderBy(x => x).Select(x => x.ToString()));
-        }
-
-        private void ValidatePair(List<TranscriptionLine> list, string path)
-        {
-            //List<(TranscriptionLine, TranscriptionLine)> outputList = new List<(TranscriptionLine, TranscriptionLine)>();
-            if (list.Count % 2 != 0)
-                ;
-            Sanity.Requires(list.Count % 2 == 0, $"Count error\t{path}");
-            TranscriptionLine o = null;
-            TranscriptionLine c = null;
-            for(int i = 0; i < list.Count - 1; i++)
-            {
-                var line = list[i];
-                Sanity.Requires(!string.IsNullOrWhiteSpace(line.Content), $"Empty line\t{path}");
-                if (i % 2 == 0)
-                {
-                    Sanity.Requires(line.Content.StartsWith("<chdialects>"), $"Not original\t{path}");
-                    Sanity.Requires(o == null || line.TS.StartTime >= line.TS.EndTime, $"Time stamp mismatch\t{path}");
-                    o = line;                    
-                }
-                else
-                {
-                    Sanity.Requires(line.Content.StartsWith("<chdialects-converted>"), $"Not converted\t{path}");
-                    c = line;
-                    Sanity.Requires(o.TS.StartTime == c.TS.StartTime, $"Start mismatch\t{path}");
-                    Sanity.Requires(o.TS.EndTime == c.TS.EndTime, $"End mismatch\t{path}");
-                }
-            }            
-        }
-    }
-    
-    class TimeStamp
-    {
-        public double StartTime { get; set; }
-        public double EndTime { get; set; }
-        public TimeStamp(string s)
-        {
-            string core = s.Substring(1, s.Length - 2);
-            try
-            {
-                StartTime = double.Parse(core.Split(' ','\u00a0')[0]);
-                EndTime = double.Parse(core.Split(' ', '\u00a0')[1]);
-            }
-            catch
-            {
-                var r = core.ToArray();
-            }
-            Sanity.Requires(EndTime >= StartTime, "Endtime less than start time.");
-        }
-
-        public override string ToString()
-        {
-            return $"[{StartTime} {EndTime}]";
-        }
-    }
-    class TranscriptionLine : Line
-    {
-        public TimeStamp TS { get; set; }
-        public string SpeakerId { get; set; }
-        public string Content { get; set; }
-        public int Converted { get; set; } = 0;
-        protected override IEnumerable<object> GetLine()
-        {
-            yield return TS.ToString();
-            yield return SpeakerId;
-            yield return Content;
-        }
-
-        protected override void SetLine(string[] split)
-        {
-            throw new CommonException("Transcription line doesn't support direct SetLine.");
-        }
-
-        private void SetConverted()
-        {
-            if (Content.Length == 0)
-            {
-                Converted = 0;
-                return;
-            }
-            if (Content.StartsWith("<chdialects>") && Content.EndsWith("<chdialects/>"))
-            {
-                Converted = -1;
-                return;
-            }
-            if(Content.StartsWith("<chdialects-converted>") && Content.EndsWith("<chdialects-converted/>"))
-            {
-                Converted = 1;
-                return;
-            }
-            throw new CommonException("Invalid head tail.");
-        }
-    }
-
-
-    class NewTransValidation
-    {
-        public NewTransValidation()
+        public TranscriptValidation()
         {
             BrowseFolder();
+            string filePath = @"";
+            string o = @"";
+            //foreach(string s in File.ReadLines(filePath))
+            //{
+            //    MappingLine line = new MappingLine(s);
+            //    string inputTxt = line.LocalPath;
+            //    string inputWav = inputTxt.ToLower().Replace(".txt", ".wav");
+            //    string outputName = $"{line.Dialect}_{line.SpeakerId}_{line.SpeakerId}";
+            //    string outputTxt = Path.Combine(o, outputName + ".txt");
+            //    string outputWav = Path.Combine(o, outputName + ".wav");
+            //}
         }
         List<string> DialectTagList = new List<string>();
         HashSet<string> BlackList = new HashSet<string>();
         HashSet<string> TagSet = new HashSet<string>();
-        HashSet<string> IncompleteSet = new HashSet<string>();
+        (string, string)[] ReplaceArray = new (string, string)[0];
+        HashSet<string> ValidTagSet = new HashSet<string>();
+        HashSet<char> CharSet = new HashSet<char>();
         private void BrowseFolder()
         {
             string rootPath = @"D:\WorkFolder\Transcripts\20201224\Input";
-            string outputPath = @"D:\WorkFolder\Transcripts\20201224\result.txt";
-            string dialectPath = @"D:\WorkFolder\Transcripts\20201224\Dialect.txt";
             string blackListPath = @"D:\WorkFolder\Transcripts\20201224\BlackList.txt";
+            string validFilePath= @"D:\WorkFolder\Transcripts\20201224\Valid.txt";
+            string mappingPath = @"D:\WorkFolder\Transcripts\20201224\Mapping.txt";
+            Dictionary<string, MappingLine> mappingDict = new Dictionary<string, MappingLine>();
             List<string> overallList = new List<string>();
-            int[] array = new int[11];
+            List<string> validFileList = new List<string>();
+            int[] array = new int[14];
             BlackList = File.ReadLines(blackListPath)
                 .Select(x => x.Split('\t')[0].ToLower())
                 .ToHashSet();
-            foreach(string filePath in Directory.EnumerateFiles(rootPath, "*.txt", SearchOption.AllDirectories))
+            ReplaceArray= IO.ReadEmbed("OfflineAudioProcessingSystem.Internal.Data.HighFreqErrorTagReplacement.txt", "OfflineAudioProcessingSystem")
+                .Select(x => (x.Split('\t')[0], x.Split('\t')[1]))
+                .ToArray();
+            ValidTagSet= IO.ReadEmbed("OfflineAudioProcessingSystem.Internal.Data.ValidTag.txt", "OfflineAudioProcessingSystem").ToHashSet();
+            mappingDict = File.ReadLines(mappingPath).ToDictionary(x => x.Split('\t')[0].ToLower(), x => new MappingLine(x));
+            foreach (string filePath in Directory.EnumerateFiles(rootPath, "*.txt", SearchOption.AllDirectories))
             {
+                if (!mappingDict.ContainsKey(filePath.ToLower()))
+                    continue;
+                var line = mappingDict[filePath.ToLower()];
+                
                 if (BlackList.Contains(filePath.ToLower()))
                     continue;
-                int hresult = ValidateFile(filePath);
+                int hresult = ValidateFile(filePath, line);
                 if (hresult != 1 && hresult != 6)
                     overallList.Add($"{hresult}\t{filePath}");
                 if (hresult != -1)
                     array[hresult]++;
+
+                if (hresult == 0)
+                    validFileList.Add(filePath);
+
             }
-            File.WriteAllLines(outputPath, overallList.OrderBy(x => x));
-            File.WriteAllLines(dialectPath, DialectTagList);
-            foreach(int i in array)
-                Console.WriteLine(i);
+            File.WriteAllLines(validFilePath, validFileList);
         }
-        private int ValidateFile(string filePath)
+        private int ValidateFile(string filePath, MappingLine mappingLine)
         {
             var r = File.ReadAllLines(filePath);
             List<TransLine> list = new List<TransLine>();
@@ -334,14 +79,30 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                 Sanity.Requires(r.Length >2, "Empty file", 1);
                 foreach (string s in r)
                 {
-                    var line = ExtractLine(s);
-                    list.Add(line);
+                    try
+                    {
+                        var line = ExtractLine(s);
+                        line.Content = ValidateContent(line.Content);
+                        list.Add(line);
+                    }
+                    catch(CommonException e)
+                    {
+                        switch (e.HResult)
+                        {
+                            case 10:
+                            case 11:
+                            case 12:
+                            case 13:
+                                Console.WriteLine($"{e.Message}\t{filePath}");
+                                break;
+                            default:
+                                break;
+                        }
+                    }
                 }
                 string wavePath = filePath.ToLower().Replace(".txt", ".wav");
                 ValidateTime(wavePath, list);
-                ValidateList(list);
-                if(list.Count<20)
-                    Console.WriteLine(filePath);
+                ValidateListPair(list);
             }
             catch(CommonException e)
             {
@@ -365,7 +126,16 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
             {
                 return -1;
             }
+            string outputRootPath = @"D:\WorkFolder\Transcripts\20201224\Output";
+            string name = $"{mappingLine.Dialect}_{mappingLine.SpeakerId}_{mappingLine.SpeakerId}";
+            string inputWavePath = filePath.ToLower().Replace(".txt", ".wav");
+            
+            string outputTextPath = Path.Combine(outputRootPath, name + ".txt");
+            string outputWavPath = Path.Combine(outputRootPath, name + ".wav");
 
+            var outputList = list.Select(x => OutputTransLine(x));
+            File.Copy(inputWavePath, outputWavPath, true);
+            File.WriteAllLines(outputTextPath, outputList);
             return 0;
         }
         private bool WithTimeStamp(string s)
@@ -438,14 +208,25 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
             if (totalContent.StartsWith(C_PREFIX) && totalContent.EndsWith(C_SUFFIX))
                 return GetMiddle(totalContent, C_PREFIX, C_SUFFIX);
             if (totalContent.StartsWith(O_PREFIX))
-                return ExtractFix($"{totalContent}{O_SUFFIX}");
+            {
+                if (!totalContent.EndsWith(O_PREFIX))
+                    return ExtractFix($"{totalContent}{O_SUFFIX}");
+                string middle = totalContent.Replace(O_PREFIX, "").Trim();
+                return (O_PREFIX, middle, O_SUFFIX);
+            }
             if (totalContent.StartsWith(C_PREFIX))
-                return ExtractFix($"{totalContent}{C_SUFFIX}");
+            {
+                if (!totalContent.EndsWith(C_PREFIX))
+                    return ExtractFix($"{totalContent}{C_SUFFIX}");
+                string middle = totalContent.Replace(C_PREFIX, "").Trim();
+                return (C_PREFIX, middle, C_SUFFIX);
+            }
             throw new CommonException(totalContent, 5);
         }
         private (string,string,string) GetMiddle(string total, string prefix, string suffix)
         {
             string middle = total.Substring(prefix.Length, total.Length - prefix.Length - suffix.Length).Trim();
+            middle = middle.Replace(prefix, "").Replace(suffix, "");            
             return (prefix, middle, suffix);
         }
         private void ValidateTime(string wavePath, List<TransLine> list)
@@ -460,10 +241,10 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
         }
         private string OutputTransLine(TransLine line)
         {
-            return $"[{line.StartTime} {line.EndTime}] {line.Speaker} {line.Prefix}{line.Content}{line.Suffix}";
+            return $"[{line.StartTime} {line.EndTime}] {line.Speaker} {line.Prefix} {line.Content} {line.Suffix}";
         }
 
-        private void ValidateList(List<TransLine> list)
+        private void ValidateListPair(List<TransLine> list)
         {
             Sanity.Requires(list.Count % 2 == 0, $"Count error.", 8);
             TransLine o = new TransLine { StartTime = double.MinValue, EndTime = double.MinValue + 1 };
@@ -476,24 +257,82 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
             }
         }
 
-        Regex TagReg = new Regex("<.*?>", RegexOptions.Compiled);
-        Regex ImcompleteReg = new Regex("");
-        private string CleanupContent(string content)
+        Regex TagReg = new Regex("<[^<]*?>", RegexOptions.Compiled);
+                        
+        private string ValidateContent(string content)
         {
+            if(content.ToLower().StartsWith("s1")||content.ToLower().StartsWith("s2"))            
+                content = content.Substring(2).Trim();            
+            Sanity.Requires(!content.ToLower().Contains("s1") && !content.ToLower().Contains("s2"), "Content with speaker id", 10);
+            Sanity.Requires(!content.ToLower().Contains("chdialects"), "Content with dialect tag", 11);
+            foreach (var replace in ReplaceArray)
+                content = content.Replace(replace.Item1, replace.Item2);
+            content = content.Replace("?", "<questionmark>")
+                .Replace(",", "<comma>")
+                .Replace(";", "<comma>")
+                .Replace(".", "<fullstop>")
+                .Replace("!", "<fullstop>")
+                .Replace("´", "'");
+
             var regs = GetTags(content);
             TagSet.UnionWith(regs);
             string rawContent = TagReg.Replace(content, " ");
-
-            return "";
+            Sanity.Requires(!rawContent.Contains('<') && !rawContent.Contains('>'), "Content with incomplete tag", 12);
+            foreach(char c in rawContent)
+            {
+                if (c >= 'A' && c <= 'Z')
+                    continue;
+                if (c >= 'a' && c <= 'z')
+                    continue;
+                if (c >= '\u00c0' && c <= '\u00ff')
+                    continue;
+                if (c == ' ' || c == '-' || c == '\'')
+                    continue;                
+                throw new CommonException($"Invalid char {c}", 13);
+            }
+            CharSet.UnionWith(rawContent);
+            content = CleanupSpace(content);
+            return content;
         }
         
         private IEnumerable<string> GetTags(string content)
         {
             return TagReg.Matches(content).Cast<Match>().Select(x => x.Groups[0].Value);
         }
-    }
 
-    
+        private MappingLine GenerateMappingLine(string s)
+        {
+            var split = s.Split('\t');
+            string taskInternalName = split[0].Split('\\').Last().Replace(".txt", "");
+            string dialect = split[1].ToLower();
+            string gender = split[3].ToLower();
+            int age = int.Parse(split[4]);
+            string azureFolder = split[5];
+            string azurePath = AzureUtils.SetDataUri(AzureUtils.PathCombine(azureFolder, taskInternalName.Replace(' ','+')+".wav"));
+
+            string azureName = AzureUtils.BlobExists(azurePath) ?
+                AzureUtils.GetShort( azurePath) :
+                "";
+            return new MappingLine
+            {
+                AzureName = azureName,
+                TaskId = "",
+                TaskInternalName = taskInternalName,
+                Dialect = dialect,
+                SpeakerId = "",
+                Gender = gender,
+                Age = age,
+            };
+        }
+
+        private string CleanupSpace(string content)
+        {
+            content = content.Replace("<", " <").Replace(">", "> ");
+            content = SpaceReg.Replace(content, " ").Trim();
+            content = content.Replace("> <", "><");
+            return content;
+        }
+    }   
 
     struct TransLine
     {
@@ -503,5 +342,42 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
         public string Suffix { get; set; }
         public string Speaker { get; set; }
         public string Content { get; set; }
+    }
+
+    class MappingLine : Line
+    {
+        public string LocalPath { get; set; }
+        public string AzureName { get; set; }
+        public string TaskId { get; set; }
+        public string TaskInternalName { get; set; }
+        public string Dialect { get; set; }
+        public string SpeakerId { get; set; }
+        public string Gender { get; set; }
+        public int Age { get; set; }
+        public MappingLine() : base() { }
+        public MappingLine(string lineStr) : base(lineStr) { }
+        protected override IEnumerable<object> GetLine()
+        {
+            yield return LocalPath;
+            yield return AzureName;
+            yield return TaskId;
+            yield return TaskInternalName;
+            yield return Dialect;
+            yield return SpeakerId;
+            yield return Gender;
+            yield return Age;
+        }
+
+        protected override void SetLine(string[] split)
+        {
+            LocalPath = split[0];
+            AzureName = split[1];
+            TaskId = split[3];
+            TaskInternalName = split[4];
+            Dialect = split[5];
+            SpeakerId = split[6];
+            Gender = split[7];
+            Age = int.Parse(split[8]);
+        }
     }
 }

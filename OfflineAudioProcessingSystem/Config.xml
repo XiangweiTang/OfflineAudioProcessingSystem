@@ -4,8 +4,13 @@
     <Name>Bobo</Name>
   </HelloWorld>
   <AudioTransfer>
-    <InputFolder Path="300hrs data acquisition/Bern/Bern 28.12.2020 Melinda/"/>
-    <OutputFolder Path="https://marksystemapistorage.blob.core.windows.net/chdatacollections/300hrsRecordingContent/"/>
+    <Input>
+      <AzureFolder Path="300hrs data acquisition/Visp/Visp:Naters 30.12.2020 Sandra /"/>
+      <AzureFolder Path="300hrs data acquisition/Zurich/Zürich 30.12.2020 Jessica/"/>
+    </Input>    
+    <OutputAzureRootFolder Path="https://marksystemapistorage.blob.core.windows.net/chdatacollections/300hrsRecordingContent/"/>
+    <ReportRootFolder Path="d:\tmp"/>
+    <AudioRootFolder Path="D:\WorkFolder\Input\300hrsRecordingContent"/>
     <AudioSettings SampleRate="16000" NumChannels="1"/>
   </AudioTransfer>
   <Common>

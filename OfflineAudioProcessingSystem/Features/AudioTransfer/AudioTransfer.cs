@@ -24,13 +24,15 @@ namespace OfflineAudioProcessingSystem.AudioTransfer
         protected override void Run()
         {
             GetNamingDict();
-            TransferFromAzureToAzure(AzureUtils.SetDataUri(Cfg.InputPath), Cfg.OutputPath);
+            foreach (string subPath in Cfg.InputAzureFolderPathArray)
+                TransferFromAzureToAzure(AzureUtils.SetDataUri(subPath), Cfg.OutputAzureRootFolderPath);
         }       
         
         private void TransferFromAzureToAzure(string inputAzureUri, string outputAzureRootUri)
         {
+            Console.WriteLine($"Processing {inputAzureUri}");
             var split = inputAzureUri.Trim('/').Split('/');
-            string subFolderName = split.Last().Trim();
+            string subFolderName = split.Last().Trim().Replace(":", "");
             string locale = Dict[split[split.Length - 2]];
             string downloadFolder = Path.Combine(WorkFolder, "Wave", subFolderName, "Download");
             string intermediaFolder = Path.Combine(WorkFolder, "Wave", subFolderName, "Intermedia");
@@ -38,14 +40,14 @@ namespace OfflineAudioProcessingSystem.AudioTransfer
             Directory.CreateDirectory(downloadFolder);
             Directory.CreateDirectory(intermediaFolder);
             Directory.CreateDirectory(uploadFolder);
-            foreach(string azureFileName in AzureUtils.ListBlobs(inputAzureUri))
+            foreach(string azureFileName in AzureUtils.ListCurrentBlobs(inputAzureUri))
             {
                 string fileName = azureFileName.Split('/').Last();
                 string localPath = Path.Combine(downloadFolder, fileName);
                 AzureUtils.Download(azureFileName, localPath);
             }
 
-            string reportFolderPath = Path.Combine(Cfg.ReportRootFolder, "_Report", subFolderName);
+            string reportFolderPath = Path.Combine(Cfg.ReportRootFolderPath, "_Report", subFolderName);
             Directory.CreateDirectory(reportFolderPath);
             string reportPath = Path.Combine(reportFolderPath, "Report.txt");
             string errorPath = Path.Combine(reportFolderPath, "Error.txt");
@@ -102,6 +104,8 @@ namespace OfflineAudioProcessingSystem.AudioTransfer
             try
             {
                 string ext = inputPath.Split('.').Last().ToLower();
+                if (ext.ToLower() == ".ds_tore")
+                    return;
                 Sanity.Requires(ValidExtSet.Contains(ext), $"Invalid extension: {ext}");
                 ConvertToWave(inputPath, intermediaPath, outputPath);
                 Wave w = new Wave();
