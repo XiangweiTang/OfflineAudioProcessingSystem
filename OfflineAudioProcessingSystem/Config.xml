@@ -5,8 +5,11 @@
   </HelloWorld>
   <AudioTransfer>
     <Input>
-      <AzureFolder Path="300hrs data acquisition/Visp/Visp:Naters 30.12.2020 Sandra /"/>
-      <AzureFolder Path="300hrs data acquisition/Zurich/Zürich 30.12.2020 Jessica/"/>
+      <AzureFolder Path="300hrs data acquisition/Luzern/Luzern 31.12.2020  Keshina/"/>
+      <AzureFolder Path="300hrs data acquisition/Luzern/Luzern 31.12.2020 Oliver /"/>
+      <AzureFolder Path="300hrs data acquisition/Luzern/Luzern 31.12.2020 Rahel/"/>
+      <AzureFolder Path="300hrs data acquisition/Visp/Visp 31.12.2020 Eleonore /"/>
+      <AzureFolder Path="300hrs data acquisition/Visp/Visp 31.12.2020 Heidi/"/>
     </Input>    
     <OutputAzureRootFolder Path="https://marksystemapistorage.blob.core.windows.net/chdatacollections/300hrsRecordingContent/"/>
     <ReportRootFolder Path="d:\tmp"/>

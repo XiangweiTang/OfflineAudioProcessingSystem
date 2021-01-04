@@ -14,17 +14,6 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
         public TranscriptValidation()
         {
             BrowseFolder();
-            string filePath = @"";
-            string o = @"";
-            //foreach(string s in File.ReadLines(filePath))
-            //{
-            //    MappingLine line = new MappingLine(s);
-            //    string inputTxt = line.LocalPath;
-            //    string inputWav = inputTxt.ToLower().Replace(".txt", ".wav");
-            //    string outputName = $"{line.Dialect}_{line.SpeakerId}_{line.SpeakerId}";
-            //    string outputTxt = Path.Combine(o, outputName + ".txt");
-            //    string outputWav = Path.Combine(o, outputName + ".wav");
-            //}
         }
         List<string> DialectTagList = new List<string>();
         HashSet<string> BlackList = new HashSet<string>();
@@ -185,7 +174,11 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
             string core = s.Substring(1, s.Length - 2);
             string startString = core.Split(' ')[0];
             string endString = core.Split(' ')[1];
-            return (double.Parse(startString), double.Parse(endString));
+            double startTime = double.Parse(startString);
+            double endTime = double.Parse(endString);
+            if (startTime < 0)
+                startTime = 0;
+            return (startTime, endTime);
         }
         private string GetSpeakerId(string tail, out int index)
         {

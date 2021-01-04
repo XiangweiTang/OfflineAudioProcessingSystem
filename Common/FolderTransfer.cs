@@ -58,4 +58,12 @@ namespace Common
             return inputItemName;
         }
     }
+
+    public class FolderCopy : FolderTransfer
+    {
+        protected override void ItemTransfer(string inputPath, string outputPath)
+        {
+            File.Copy(inputPath, outputPath);
+        }
+    }
 }

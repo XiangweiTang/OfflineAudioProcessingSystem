@@ -12,6 +12,8 @@ namespace OfflineAudioProcessingSystem.AudioTransfer
     {
         ConfigAudioTransfer Cfg = new ConfigAudioTransfer();
         Dictionary<string, string> Dict = new Dictionary<string, string>();
+        List<string> TotalReportList = new List<string>();
+        List<string> TotalErrorList = new List<string>();
         protected override void LoadConfig(string configPath)
         {
             Cfg.Load(configPath);
@@ -24,61 +26,93 @@ namespace OfflineAudioProcessingSystem.AudioTransfer
         protected override void Run()
         {
             GetNamingDict();
+            TotalReportList.Add("Original name\tWave name\tDuration(s)");
             foreach (string subPath in Cfg.InputAzureFolderPathArray)
-                TransferFromAzureToAzure(AzureUtils.SetDataUri(subPath), Cfg.OutputAzureRootFolderPath);
+                TransferFromAzureToAzure(AzureUtils.SetDataUri(subPath), Cfg.OutputAzureRootFolderPath, Cfg.DailyRootFolderPath);
+            string errorPath = Cfg.ReportRootFolderPath + ".error";
+            string reportPath = Cfg.ReportRootFolderPath + ".log";
+            File.WriteAllLines(errorPath, TotalErrorList);
+            File.WriteAllLines(reportPath, TotalReportList);
         }       
         
-        private void TransferFromAzureToAzure(string inputAzureUri, string outputAzureRootUri)
+        private void TransferFromAzureToAzure(string inputAzureUri, string outputAzureRootUri, string localDailyRootFolder)
         {
             Console.WriteLine($"Processing {inputAzureUri}");
+
             var split = inputAzureUri.Trim('/').Split('/');
             string subFolderName = split.Last().Trim().Replace(":", "");
             string locale = Dict[split[split.Length - 2]];
+
             string downloadFolder = Path.Combine(WorkFolder, "Wave", subFolderName, "Download");
             string intermediaFolder = Path.Combine(WorkFolder, "Wave", subFolderName, "Intermedia");
             string uploadFolder = Path.Combine(Cfg.AudioRootFolder, locale, subFolderName);
+            string localDailyFolder = Path.Combine(localDailyRootFolder, subFolderName);
+            string reportFolderPath = Path.Combine(Cfg.ReportRootFolderPath, subFolderName);
+            string reportFilePath = Path.Combine(reportFolderPath, "Report.txt");
+            string errorFilePath = Path.Combine(reportFolderPath, "Error.txt");
+            string outputAzureUri = AzureUtils.PathCombine(outputAzureRootUri, locale, subFolderName);
+
             Directory.CreateDirectory(downloadFolder);
             Directory.CreateDirectory(intermediaFolder);
             Directory.CreateDirectory(uploadFolder);
-            foreach(string azureFileName in AzureUtils.ListCurrentBlobs(inputAzureUri))
+            Directory.CreateDirectory(localDailyFolder);
+            Directory.CreateDirectory(reportFolderPath);
+
+            Download(inputAzureUri, downloadFolder);
+
+            CheckAndTransfer(reportFilePath, errorFilePath, downloadFolder, intermediaFolder, uploadFolder);
+
+            UploadAndCopy(uploadFolder, outputAzureUri, localDailyFolder);
+        }
+
+        private void Download(string inputAzureUri, string downloadFolder)
+        {
+            foreach (string azureFileName in AzureUtils.ListCurrentBlobs(inputAzureUri))
             {
                 string fileName = azureFileName.Split('/').Last();
                 string localPath = Path.Combine(downloadFolder, fileName);
                 AzureUtils.Download(azureFileName, localPath);
             }
+        }
 
-            string reportFolderPath = Path.Combine(Cfg.ReportRootFolderPath, "_Report", subFolderName);
-            Directory.CreateDirectory(reportFolderPath);
-            string reportPath = Path.Combine(reportFolderPath, "Report.txt");
-            string errorPath = Path.Combine(reportFolderPath, "Error.txt");
+        private void CheckAndTransfer(string reportPath, string errorPath, string downloadFolder, string intermediaFolder, string uploadFolder)
+        {
             AudioFolderTransfer aft = new AudioFolderTransfer(reportPath, Cfg.ExistringFileListPath, errorPath, intermediaFolder)
             {
                 SampleRate = Cfg.SampleRate,
                 NumChannels = Cfg.NumChannels,
                 MaxParallel = 5
             };
-            aft.Run(downloadFolder, uploadFolder);
+            aft.Run(downloadFolder, uploadFolder);            
+            TotalReportList.AddRange(aft.ReportList);
+            TotalErrorList.AddRange(aft.ErrorList);
+        }
 
-            foreach(string localFilePath in Directory.EnumerateFiles(uploadFolder))
+        private void UploadAndCopy(string uploadFolder, string outputAzureUri, string localDailyFolder)
+        {
+            foreach (string localFilePath in Directory.EnumerateFiles(uploadFolder))
             {
                 string fileName = localFilePath.Split('\\').Last();
-                string uploadFileName = AzureUtils.PathCombine(outputAzureRootUri, locale, subFolderName, fileName);
+                string uploadFileName = AzureUtils.PathCombine(outputAzureUri, fileName);
                 AzureUtils.Upload(localFilePath, uploadFileName);
             }
-        }
+
+            FolderCopy fc = new FolderCopy();
+            fc.Run(uploadFolder, localDailyFolder);
+        }        
     }
 
     class AudioFolderTransfer : FolderTransfer
     {
-        const int BUFFER_SIZE = 50 * 1024;  // 50K.
         HashSet<string> ValidExtSet = new HashSet<string>();
         public int SampleRate { get; set; } = 16000;
         public int NumChannels { get; set; } = 1;
-        private List<string> ReportList = new List<string>();
-        private List<string> ErrorList = new List<string>();
+        public List<string> ReportList { get; private set; } = new List<string>();
+        public List<string> ErrorList { get; private set; } = new List<string>();
         private string ReportPath = "";
         private string ErrorPath = "";
-        private Dictionary<string, List<string>> ExistingFileDict = new Dictionary<string, List<string>>();
+        private Dictionary<string, List<string>> FileSizeDict = new Dictionary<string, List<string>>();
+        private Dictionary<string, string> ExistingFileDict = new Dictionary<string, string>();
         private string ExistingFileListPath = "";
         private List<string> NewFileList = new List<string>();
         private string WorkFolder = "";
@@ -91,18 +125,21 @@ namespace OfflineAudioProcessingSystem.AudioTransfer
         }
         protected override void PreRun()
         {
-            ReportList.Add("Original name\tWave name\tDuration(s)");
             ValidExtSet = IO.ReadEmbed($"{LocalConstants.LOCAL_ASMB_NAME}.Internal.Data.AudioInputExt.txt", LocalConstants.LOCAL_ASMB_NAME)
                 .ToHashSet();
-            ExistingFileDict = File.ReadLines(ExistingFileListPath)
+            FileSizeDict = File.ReadLines(ExistingFileListPath)
                 .GroupBy(x => x.Split('\t')[0])
-                .ToDictionary(x => x.Key, x => x.Select(y=>y.Split('\t')[1]).ToList());
+                .ToDictionary(x => x.Key, x => x.Select(y => y.Split('\t')[1]).ToList());
+            ExistingFileDict = File.ReadLines(ExistingFileListPath)
+                .ToDictionary(x => x.Split('\t')[1], x => x.Split('\t')[0]);
         }
         protected override void ItemTransfer(string inputPath, string outputPath)
         {
             string intermediaPath = Path.Combine(WorkFolder, Guid.NewGuid() + ".wav");
             try
             {
+                if (ExistingFileDict.ContainsKey(outputPath))
+                    return;
                 string ext = inputPath.Split('.').Last().ToLower();
                 if (ext.ToLower() == ".ds_tore")
                     return;
@@ -114,10 +151,10 @@ namespace OfflineAudioProcessingSystem.AudioTransfer
                 string key = w.DataChunk.Length.ToString();
                 lock (LockObj)
                 {
-                    if (ExistingFileDict.ContainsKey(key))
+                    if (FileSizeDict.ContainsKey(key))
                     {
-                        foreach (string existingFilePath in ExistingFileDict[key])
-                        {                            
+                        foreach (string existingFilePath in FileSizeDict[key])
+                        {
                             if (LocalCommon.AudioIdentical(existingFilePath, outputPath))
                             {
                                 ErrorList.Add($"{outputPath}\t{existingFilePath}");
@@ -126,17 +163,17 @@ namespace OfflineAudioProcessingSystem.AudioTransfer
                                 return;
                             }
                         }
-                        ExistingFileDict[key].Add(outputPath);
+                        FileSizeDict[key].Add(outputPath);
                     }
                     else
-                        ExistingFileDict[key] = new List<string> { outputPath };
+                        FileSizeDict[key] = new List<string> { outputPath };
                     ReportList.Add(reportLine);
                     NewFileList.Add($"{key}\t{outputPath}");
                     if (File.Exists(intermediaPath))
                         File.Delete(intermediaPath);
                 }
             }
-            catch(CommonException e)
+            catch (CommonException e)
             {
                 string errorMessage = $"{inputPath}\t{e.Message}";
                 ErrorList.Add(errorMessage);
@@ -155,7 +192,7 @@ namespace OfflineAudioProcessingSystem.AudioTransfer
             w.ShallowParse(interMediaPath);
             Sanity.Requires(w.SampleRate >= SampleRate, w.SampleRate.ToString());
             File.Delete(interMediaPath);
-            LocalCommon.SetAudioWithFfmpeg(inputPath.WrapPath(), SampleRate, NumChannels, outputPath.WrapPath());            
+            LocalCommon.SetAudioWithFfmpeg(inputPath.WrapPath(), SampleRate, NumChannels, outputPath.WrapPath());
         }
 
         public override string ItemRename(string inputItemName)
@@ -170,5 +207,5 @@ namespace OfflineAudioProcessingSystem.AudioTransfer
             File.WriteAllLines(ErrorPath, ErrorList);
             File.AppendAllLines(ExistingFileListPath, NewFileList);
         }
-    }
+    }    
 }
