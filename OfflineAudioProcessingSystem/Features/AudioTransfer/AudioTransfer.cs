@@ -141,7 +141,7 @@ namespace OfflineAudioProcessingSystem.AudioTransfer
                 if (ExistingFileDict.ContainsKey(outputPath))
                     return;
                 string ext = inputPath.Split('.').Last().ToLower();
-                if (ext.ToLower() == "ds_tore")
+                if (ext.ToLower() == "ds_store")
                     return;
                 Sanity.Requires(ValidExtSet.Contains(ext), $"Invalid extension: {ext}");
                 ConvertToWave(inputPath, intermediaPath, outputPath);
@@ -167,6 +167,18 @@ namespace OfflineAudioProcessingSystem.AudioTransfer
                     }
                     else
                         FileSizeDict[key] = new List<string> { outputPath };
+                    try
+                    {
+                        string outputTimeStampPath = outputPath.Replace(".wav", ".txt");
+                        if (File.Exists(outputTimeStampPath))
+                            File.Delete(outputTimeStampPath);
+                        LocalCommon.SetTimeStampsWithVad(outputPath, outputTimeStampPath);
+                        Sanity.Requires(File.Exists(outputTimeStampPath));
+                    }
+                    catch
+                    {
+                        ErrorList.Add($"{outputPath}\tNo time stamp file.");
+                    }
                     ReportList.Add(reportLine);
                     NewFileList.Add($"{key}\t{outputPath}");
                     if (File.Exists(intermediaPath))
