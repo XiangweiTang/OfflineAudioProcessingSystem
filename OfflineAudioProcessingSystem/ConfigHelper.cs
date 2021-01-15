@@ -62,6 +62,8 @@ namespace OfflineAudioProcessingSystem
         {
             LocalCommon.SoxPath = cfg.SoxPath;
             LocalCommon.FfmpegPath = cfg.FfmpegPath;
+            LocalCommon.PythonPath = cfg.PythonPath;
+            LocalCommon.VadScriptPath = cfg.VadScriptPath;            
         }
 
         private Feature GetFeature(string featureName)

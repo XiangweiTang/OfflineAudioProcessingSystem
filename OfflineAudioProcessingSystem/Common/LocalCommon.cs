@@ -12,6 +12,8 @@ namespace OfflineAudioProcessingSystem
     {
         public static string SoxPath { get; set; }
         public static string FfmpegPath { get; set; }
+        public static string VadScriptPath { get; set; }
+        public static string PythonPath { get; set; }
         public static void RunFfmpeg(string arguments)
         {
             RunFile.Run(FfmpegPath, arguments, false, "");
@@ -49,6 +51,12 @@ namespace OfflineAudioProcessingSystem
             string arguments = $"{inputAudioPath} -r {sampleRate} -c {channelNumber} {outputAudioPath}";
             RunSox(arguments);
         }
+
+        public static void SetTimeStampsWithVad(string inputAudioPath, string outputTimeStampFilePath)
+        {
+            RunFile.RunPython(PythonPath, VadScriptPath, "1", inputAudioPath.WrapPath(), outputTimeStampFilePath.WrapPath());
+        }
+
         public static bool BinaryIdentical(Stream fs1, int offset1, Stream fs2, int offset2)
         {
             const int BUFFER_SIZE = 10_000;

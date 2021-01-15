@@ -17,5 +17,7 @@
   <Common>
     <Sox Path="C:\Program Files (x86)\sox-14-4-2\sox.exe"/>
     <Ffmpeg Path="D:\AutomationSystem\ExternalTools\ffmpeg.exe"/>
+    <Python Path="C:\Users\engcheck\AppData\Local\Programs\Python\Python38\python.exe"/>
+    <VadScript Path="D:\AutomationSystem\ExternalTools\VAD\py-webrtcvad\Print.py"/>
   </Common>
 </Root>

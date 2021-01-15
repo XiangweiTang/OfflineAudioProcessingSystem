@@ -26,5 +26,11 @@ namespace Common
                 proc.WaitForExit();
             }
         }
+        public static void RunPython(string pythonPath, string scriptPath, params string[] args)
+        {
+            var totalArgs = scriptPath.WrapPath().Concat(args);
+            string arguments = string.Join(" ", totalArgs);
+            Run(pythonPath, arguments, false, "");
+        }
     }
 }
