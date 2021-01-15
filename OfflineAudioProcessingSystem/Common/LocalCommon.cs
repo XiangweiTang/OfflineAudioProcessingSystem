@@ -49,37 +49,61 @@ namespace OfflineAudioProcessingSystem
             string arguments = $"{inputAudioPath} -r {sampleRate} -c {channelNumber} {outputAudioPath}";
             RunSox(arguments);
         }
-        public static bool AudioIdentical(string waveFilePath1, string waveFilePath2)
+        public static bool BinaryIdentical(Stream fs1, int offset1, Stream fs2, int offset2)
         {
             const int BUFFER_SIZE = 10_000;
+            fs1.Seek(offset1, SeekOrigin.Begin);
+            fs2.Seek(offset2, SeekOrigin.Begin);
+            byte[] buffer1 = new byte[BUFFER_SIZE];
+            byte[] buffer2 = new byte[BUFFER_SIZE];
+            while (fs1.Position < fs1.Length)
+            {                
+                try
+                {
+                    int p=fs1.Read(buffer1, 0, BUFFER_SIZE);
+                    int q=fs2.Read(buffer2, 0, BUFFER_SIZE);
+                    //Console.WriteLine($"{fs2.Position}\t{fs1.Position}");
+                    //if (fs2.Position - fs1.Position == offset2 - offset1)
+                    //    ;
+                    //else
+                    //    ;
+                    if (buffer1.SequenceEqual(buffer2))
+                       continue;
+                    return false;
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+        public static bool AudioidenticalAzure(string azureUri1, string azureUri2)
+        {
+            using (Stream st1 = AzureUtils.ReadBlobToStream(azureUri1))
+            using (Stream st2 = AzureUtils.ReadBlobToStream(azureUri2))
+            {
+                Wave w1 = new Wave();
+                w1.ShallowParse(st1);
+                int offset1 = w1.DataChunk.Offset + 8;
+                Wave w2 = new Wave();
+                w2.ShallowParse(st2);
+                int offset2 = w2.DataChunk.Offset + 8;
+                return BinaryIdentical(st1, offset1, st2, offset2);
+            }
+        }
+        public static bool AudioIdenticalLocal(string waveFilePath1, string waveFilePath2)
+        {
             Wave w1 = new Wave();
             w1.ShallowParse(waveFilePath1);
+            int offset1 = w1.DataChunk.Offset + 8;
             Wave w2 = new Wave();
-            w2.ShallowParse(waveFilePath1);
-            using (FileStream fs1 = new FileStream(waveFilePath1, FileMode.Open, FileAccess.Read))
-            using (FileStream fs2 = new FileStream(waveFilePath2, FileMode.Open, FileAccess.Read))
+            w2.ShallowParse(waveFilePath2);
+            int offset2 = w2.DataChunk.Offset + 8;
+            using (Stream fs1 = File.OpenRead(waveFilePath1))
+            using (Stream fs2 = File.OpenRead(waveFilePath2))
             {
-                fs1.Seek(w1.DataChunk.Offset + 8, SeekOrigin.Begin);
-                fs2.Seek(w2.DataChunk.Offset + 8, SeekOrigin.Begin);
-                byte[] buffer1 = new byte[BUFFER_SIZE];
-                byte[] buffer2 = new byte[BUFFER_SIZE];
-                while (fs1.Position < fs1.Length)
-                {
-                    int count = Math.Min(BUFFER_SIZE, (int)(fs1.Length - fs1.Position));
-                    try
-                    {
-                        fs1.Read(buffer1, 0, BUFFER_SIZE);
-                        fs2.Read(buffer2, 0, BUFFER_SIZE);
-                        if (buffer1.SequenceEqual(buffer2))
-                            continue;
-                        return false;
-                    }
-                    catch
-                    {
-                        return false;
-                    }
-                }
-                return true;
+                return BinaryIdentical(fs1, offset1, fs2, offset2);
             }
         }
     }

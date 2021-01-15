@@ -80,6 +80,13 @@ namespace Common
             client.Upload(localPath);
         }
 
+        public static void Delete(string uriString)
+        {
+            Uri uri = new Uri(uriString + SAS_TOKEN);
+            BlobClient client = new BlobClient(uri);
+            client.Delete();
+        }
+
         public static string PathCombine(params string[] paths)
         {
             return paths.Aggregate((x, y) => $"{x.TrimEnd('/')}/{y.TrimStart('/')}");

@@ -5,14 +5,12 @@
   </HelloWorld>
   <AudioTransfer>
     <Input>
-      <AzureFolder Path="300hrs data acquisition/Luzern/Luzern 31.12.2020  Keshina/"/>
-      <AzureFolder Path="300hrs data acquisition/Luzern/Luzern 31.12.2020 Oliver /"/>
-      <AzureFolder Path="300hrs data acquisition/Luzern/Luzern 31.12.2020 Rahel/"/>
-      <AzureFolder Path="300hrs data acquisition/Visp/Visp 31.12.2020 Eleonore /"/>
-      <AzureFolder Path="300hrs data acquisition/Visp/Visp 31.12.2020 Heidi/"/>
+      <AzureFolder Path="300hrs data acquisition/St.Gallen/St.Gallen 06.01.2021 Yasmin/"/>
+      <AzureFolder Path="300hrs data acquisition/Zurich/Zürich 30-1.2020 F/"/>
     </Input>    
     <OutputAzureRootFolder Path="https://marksystemapistorage.blob.core.windows.net/chdatacollections/300hrsRecordingContent/"/>
     <ReportRootFolder Path="d:\tmp"/>
+    <DailyRootFolder Path="D:\WorkFolder\DailyFolder"/>
     <AudioRootFolder Path="D:\WorkFolder\Input\300hrsRecordingContent"/>
     <AudioSettings SampleRate="16000" NumChannels="1"/>
   </AudioTransfer>

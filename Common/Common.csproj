@@ -85,6 +85,7 @@
     <Compile Include="AzureUtils.cs" />
     <Compile Include="FolderTransfer.cs" />
     <Compile Include="IO.cs" />
+    <Compile Include="KMeans.cs" />
     <Compile Include="Line.cs" />
     <Compile Include="Logger.cs" />
     <Compile Include="RunFile.cs" />
