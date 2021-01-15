@@ -54,6 +54,7 @@ namespace OfflineAudioProcessingSystem
 
         public static void SetTimeStampsWithVad(string inputAudioPath, string outputTimeStampFilePath)
         {
+            // The python was from: https://github.com/wiseman/py-webrtcvad
             RunFile.RunPython(PythonPath, VadScriptPath, "1", inputAudioPath.WrapPath(), outputTimeStampFilePath.WrapPath());
         }
 
