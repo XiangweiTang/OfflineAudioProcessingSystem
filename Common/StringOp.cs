@@ -25,6 +25,8 @@ namespace Common
 
         public static string WrapPath(this string path)
         {
+            if (!path.Contains(' '))
+                return path;
             char c0 = path[0];
             char cn = path[path.Length - 1];
             if (c0 == '"' && cn == '"')
