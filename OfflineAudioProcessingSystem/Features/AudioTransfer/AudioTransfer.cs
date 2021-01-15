@@ -141,7 +141,7 @@ namespace OfflineAudioProcessingSystem.AudioTransfer
                 if (ExistingFileDict.ContainsKey(outputPath))
                     return;
                 string ext = inputPath.Split('.').Last().ToLower();
-                if (ext.ToLower() == ".ds_tore")
+                if (ext.ToLower() == "ds_tore")
                     return;
                 Sanity.Requires(ValidExtSet.Contains(ext), $"Invalid extension: {ext}");
                 ConvertToWave(inputPath, intermediaPath, outputPath);
@@ -155,7 +155,7 @@ namespace OfflineAudioProcessingSystem.AudioTransfer
                     {
                         foreach (string existingFilePath in FileSizeDict[key])
                         {
-                            if (LocalCommon.AudioIdentical(existingFilePath, outputPath))
+                            if (LocalCommon.AudioIdenticalLocal(existingFilePath, outputPath))
                             {
                                 ErrorList.Add($"{outputPath}\t{existingFilePath}");
                                 if (File.Exists(outputPath))

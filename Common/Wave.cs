@@ -38,6 +38,38 @@ namespace Common
         public WaveChunk DataChunk { get; private set; } = new WaveChunk { Name = "", Length = -1, Offset = -1 };
         public List<WaveChunk> ChunkList { get; private set; } = new List<WaveChunk>();
         public Wave() { }
+
+        public static void CreateDummyPCMWave(string audioPath, double audioLength, short numChannels, short sampleRate, short bitsPerSample)
+        {
+            var bytes = CreateDummyPCMWave(audioLength, numChannels, sampleRate, bitsPerSample);
+            File.WriteAllBytes(audioPath, bytes);
+        }
+        public static byte[] CreateDummyPCMWave(double audioLength, short numChannels, short sampleRate, short bitsPerSample)
+        {
+            int dataLength = (int)(audioLength * sampleRate * numChannels * bitsPerSample / 8);
+            byte[] bytes = new byte[44 + dataLength];
+            return SetHeader(bytes, numChannels, 1, sampleRate, bitsPerSample, dataLength);
+        }
+        private static byte[] SetHeader(byte[] bytes, short numChannels, short audioType, int sampleRate, short bitsPerSample, int dataLength)
+        {
+            Sanity.Requires(bytes.Length >= 44, "Wave has to be at least 44 bytes.");
+            Array.Copy(Encoding.ASCII.GetBytes("RIFF"), 0, bytes, 0, 4);
+            Array.Copy(Encoding.ASCII.GetBytes("WAVE"), 0, bytes, 8, 4);
+            Array.Copy(Encoding.ASCII.GetBytes("fmt "), 0, bytes, 12, 4);
+            Array.Copy(Encoding.ASCII.GetBytes("data"), 0, bytes, 36, 4);
+            Array.Copy(BitConverter.GetBytes(dataLength + 44 - 8), 0, bytes, 4, 4);
+            Array.Copy(BitConverter.GetBytes(16), 0, bytes, 16, 4);
+            Array.Copy(BitConverter.GetBytes(audioType), 0, bytes, 20, 2);
+            Array.Copy(BitConverter.GetBytes(numChannels), 0, bytes, 22, 2);
+            Array.Copy(BitConverter.GetBytes(sampleRate), 0, bytes, 24, 4);
+            int byteRate = (sampleRate * numChannels * bitsPerSample / 8);
+            Array.Copy(BitConverter.GetBytes(byteRate), 0, bytes, 28, 4);
+            short blockAlign = (short)(numChannels * bitsPerSample / 8);
+            Array.Copy(BitConverter.GetBytes(blockAlign), 0, bytes, 32, 2);
+            Array.Copy(BitConverter.GetBytes(bitsPerSample), 0, bytes, 34, 2);
+            Array.Copy(BitConverter.GetBytes(dataLength), 0, bytes, 40, 4);
+            return bytes;
+        }
         public void ShallowParse(string filePath)
         {
             using(FileStream fs=new FileStream(filePath, FileMode.Open, FileAccess.Read))
@@ -220,6 +252,55 @@ namespace Common
                 l += s * s;
             }
             return l;
+        }
+
+        public IEnumerable<double> Energies(Stream st)
+        {
+            double frameLength = 1;
+            int byteLength = (int)(frameLength * SampleRate);
+            Func<byte[], int, double> localRMS = null;
+            switch(BitsPerSample)
+            {
+                case 8:
+                    localRMS = LocalRMS8Bits;
+                    break;
+                case 16:
+                    byteLength *= 2;
+                    localRMS = LocalRMS16Bits;
+                    break;
+                default:
+                    throw new CommonException();
+            }
+            byte[] buffer = new byte[byteLength];
+            st.Seek(DataChunk.Offset + 8, SeekOrigin.Begin);            
+            while (byteLength + st.Position < st.Length)
+            {
+                int length = Math.Min(byteLength, (int)(st.Length - st.Position));
+                st.Read(buffer, 0, byteLength);
+                yield return localRMS(buffer, length);
+            }
+        }
+
+        private double LocalRMS8Bits(byte[] buffer, int length)
+        {
+            long total = 0;            
+            for(int i = 0; i < length; i += 1)
+            {
+                total += buffer[i] * buffer[i];
+            }
+            return Math.Sqrt((double)total / length);
+        }
+
+        private double LocalRMS16Bits(byte[] buffer, int length)
+        {
+            long total = 0;
+            for (int i = 0; i < length; i += 2)
+            {
+                short v = BitConverter.ToInt16(buffer, i);
+                total += v * v;
+                
+            }
+            return Math.Sqrt((double)total * 2 / length);
         }
     }
 

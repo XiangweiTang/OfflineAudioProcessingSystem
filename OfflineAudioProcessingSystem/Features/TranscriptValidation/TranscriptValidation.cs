@@ -13,7 +13,7 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
     {
         public TranscriptValidation()
         {
-            BrowseFolder();
+            //BrowseFolder();
         }
         List<string> DialectTagList = new List<string>();
         HashSet<string> BlackList = new HashSet<string>();
@@ -137,90 +137,82 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
 
         private TransLine ExtractLine(string s)
         {
-            Sanity.Requires(WithTimeStamp(s), "Missing time stamp.", 2);
-            TransLine line = new TransLine();
             s = SpaceReg.Replace(s, " ").Trim();
-
-            Sanity.Requires(TransLineReg.IsMatch(s), "Missing time stamp.", 2);
-            
-            string timeStampString = TransLineReg.Match(s).Groups[1].Value;
-
-            try
-            {
-                var timeStamp = GetTimeStamp(timeStampString);
-                line.StartTime = timeStamp.Item1;
-                line.EndTime = timeStamp.Item2;
-            }
-            catch
-            {
-                throw new CommonException("Time stamp format", 3);
-            }
-
-            string tail = TransLineReg.Match(s).Groups[2].Value;
-            Sanity.Requires(!string.IsNullOrWhiteSpace(tail), "Empty in content", 7);
-
-            int index;
-            line.Speaker = GetSpeakerId(tail, out index);
-
-            string totalContent = tail.Substring(index).Trim();
-            var parts = ExtractFix(totalContent);
-            line.Prefix = parts.Item1;
-            line.Content = parts.Item2;
-            line.Suffix = parts.Item3;
+            TransLine line = new TransLine();
+            line = SetTimeStamp(s, line);
+            line = SetSpeakerId(line.Content, line);
+            line = SetDialectFix(line.Content, line);
             return line;
         }
-        private (double,double) GetTimeStamp(string s)
+
+        private TransLine SetTimeStamp(string s, TransLine line)
         {
-            string core = s.Substring(1, s.Length - 2);
-            string startString = core.Split(' ')[0];
-            string endString = core.Split(' ')[1];
-            double startTime = double.Parse(startString);
-            double endTime = double.Parse(endString);
-            if (startTime < 0)
-                startTime = 0;
-            return (startTime, endTime);
+            Sanity.Requires(TransLineReg.IsMatch(s), "Missing time stamp", 2);
+            var groups = TransLineReg.Match(s).Groups;
+            string timeStampString = groups[1].Value;
+
+            Sanity.ReThrow(() =>
+            {
+                string core = timeStampString.Substring(1, timeStampString.Length - 2);
+                string startString = core.Split(' ')[0];
+                string endString = core.Split(' ')[1];
+                double startTime = double.Parse(startString);
+                double endTime = double.Parse(endString);
+                line.StartTime = startTime;
+                line.EndTime = endTime;
+            }, new CommonException("Time stamp format error", 3));
+            line.Content = groups[2].Value;
+            Sanity.Requires(!string.IsNullOrWhiteSpace(line.Content), "Empty in content", 7);
+            return line;
         }
-        private string GetSpeakerId(string tail, out int index)
-        {
-            index = 2;
-            string lower = tail.ToLower();
+        private TransLine SetSpeakerId(string s, TransLine line)
+        {            
+            string lower = s.ToLower();
             Sanity.Requires(lower.StartsWith("s1") || lower.StartsWith("s2"), "Wrong speakerId", 4);
-            if (lower.StartsWith("s1") || lower.StartsWith("s2"))
-                return tail.Substring(0, 2).ToUpper();
-            index = 0;
-            return "S1";
+            line.Speaker = s.Substring(0, 2).ToUpper();
+            line.Content = s.Substring(2).Trim();
+            return line;
         }
         const string O_PREFIX = "<chdialects>";
         const string O_SUFFIX = "<chdialects/>";
         const string C_PREFIX = "<chdialects-converted>";
         const string C_SUFFIX = "<chdialects-converted/>";
-        private (string,string,string) ExtractFix(string totalContent)
+        private TransLine SetDialectFix(string s, TransLine line)
         {
-            if (totalContent.StartsWith(O_PREFIX) && totalContent.EndsWith(O_SUFFIX))
-                return GetMiddle(totalContent, O_PREFIX, O_SUFFIX);
-            if (totalContent.StartsWith(C_PREFIX) && totalContent.EndsWith(C_SUFFIX))
-                return GetMiddle(totalContent, C_PREFIX, C_SUFFIX);
-            if (totalContent.StartsWith(O_PREFIX))
+            if (s.StartsWith(O_PREFIX) && s.EndsWith(O_SUFFIX))
+                return GetMiddle(s, O_PREFIX, O_SUFFIX, line);
+            if (s.StartsWith(C_PREFIX) && s.EndsWith(C_SUFFIX))
+                return GetMiddle(s, C_PREFIX, C_SUFFIX, line);
+            if (s.StartsWith(O_PREFIX))
             {
-                if (!totalContent.EndsWith(O_PREFIX))
-                    return ExtractFix($"{totalContent}{O_SUFFIX}");
-                string middle = totalContent.Replace(O_PREFIX, "").Trim();
-                return (O_PREFIX, middle, O_SUFFIX);
+                if (!s.EndsWith(O_PREFIX))
+                    return SetDialectFix($"{s}{O_SUFFIX}", line);
+                string middle = s.Replace(O_PREFIX, "").Trim();
+                line.Prefix = O_PREFIX;
+                line.Content = middle;
+                line.Suffix = O_SUFFIX;
+                return line;                
             }
-            if (totalContent.StartsWith(C_PREFIX))
+            if (s.StartsWith(C_PREFIX))
             {
-                if (!totalContent.EndsWith(C_PREFIX))
-                    return ExtractFix($"{totalContent}{C_SUFFIX}");
-                string middle = totalContent.Replace(C_PREFIX, "").Trim();
-                return (C_PREFIX, middle, C_SUFFIX);
+                if (!s.EndsWith(C_PREFIX))
+                    return SetDialectFix($"{s}{C_SUFFIX}", line);
+                string middle = s.Replace(C_PREFIX, "").Trim();
+                line.Prefix = C_PREFIX;
+                line.Content = middle;
+                line.Suffix = C_SUFFIX;
+                return line;                
             }
-            throw new CommonException(totalContent, 5);
+            throw new CommonException(s, 5);
         }
-        private (string,string,string) GetMiddle(string total, string prefix, string suffix)
+        private TransLine GetMiddle(string total, string prefix, string suffix, TransLine line)
         {
             string middle = total.Substring(prefix.Length, total.Length - prefix.Length - suffix.Length).Trim();
-            middle = middle.Replace(prefix, "").Replace(suffix, "");            
-            return (prefix, middle, suffix);
+            middle = middle.Replace(prefix, "").Replace(suffix, "");
+            line.Prefix = prefix;
+            line.Content = middle;
+            line.Suffix = suffix;
+            return line;            
         }
         private void ValidateTime(string wavePath, List<TransLine> list)
         {
@@ -253,9 +245,7 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
         Regex TagReg = new Regex("<[^<]*?>", RegexOptions.Compiled);
                         
         private string ValidateContent(string content)
-        {
-            if(content.ToLower().StartsWith("s1")||content.ToLower().StartsWith("s2"))            
-                content = content.Substring(2).Trim();            
+        {            
             Sanity.Requires(!content.ToLower().Contains("s1") && !content.ToLower().Contains("s2"), "Content with speaker id", 10);
             Sanity.Requires(!content.ToLower().Contains("chdialects"), "Content with dialect tag", 11);
             foreach (var replace in ReplaceArray)
@@ -325,7 +315,7 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
             content = content.Replace("> <", "><");
             return content;
         }
-    }   
+    }  
 
     struct TransLine
     {

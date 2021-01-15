@@ -8,25 +8,6 @@ namespace Common
         {
             if (!valid)
             {
-                switch (hResult)
-                {
-                    case 1:
-                        break;
-                    case 2:
-                        break;
-                    case 3:
-                        break;
-                    case 4:
-                        break;
-                    case 5:
-                        break;
-                    case 6:
-                        break;
-                    case 7:
-                        break;
-                    default:
-                        break;
-                }
                 throw new CommonException(message, hResult);
             }
         }
@@ -35,6 +16,18 @@ namespace Common
             if (!valid)
             {
                 throw new CommonException(hResult);
+            }
+        }
+
+        public static void ReThrow(Action action, CommonException e)
+        {
+            try
+            {
+                action.Invoke();
+            }
+            catch
+            {
+                throw e;
             }
         }
     }
