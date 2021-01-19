@@ -13,7 +13,7 @@ namespace Common
 {
     public static class AzureUtils
     {
-        public const string BLOB_CONTAINER_NAME= "/chdatacollections/";
+        public const string BLOB_CONTAINER_NAME= "/dechcollections/";
         public static readonly string SAS_TOKEN = "";
         static AzureUtils()
         {

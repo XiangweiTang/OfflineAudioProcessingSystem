@@ -15,7 +15,15 @@ namespace OfflineAudioProcessingSystem
     {
         Random R = new Random();
         public Test(string[] args)
-        {            
+        {
+        }
+    }
+
+    class ATransfer : FolderTransfer
+    {
+        protected override void ItemTransfer(string inputPath, string outputPath)
+        {
+            LocalCommon.SetAudioToWaveWithFfmpeg(inputPath, outputPath);
         }
     }
 }
