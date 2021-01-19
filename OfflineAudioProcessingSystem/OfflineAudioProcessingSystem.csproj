@@ -58,6 +58,7 @@
     <Compile Include="Common\LocalCommon.cs" />
     <Compile Include="Common\LocalConstants.cs" />
     <Compile Include="Features\TranscriptValidation\ConfigTranscriptValidation.cs" />
+    <Compile Include="Features\TranscriptValidation\Mapping.cs" />
     <Compile Include="Features\TranscriptValidation\TranscriptValidation.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

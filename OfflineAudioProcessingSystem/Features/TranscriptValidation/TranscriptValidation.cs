@@ -13,59 +13,57 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
     {
         public TranscriptValidation()
         {
-            //BrowseFolder();
+            Init();            
         }
-        List<string> DialectTagList = new List<string>();
-        HashSet<string> BlackList = new HashSet<string>();
         HashSet<string> TagSet = new HashSet<string>();
         (string, string)[] ReplaceArray = new (string, string)[0];
         HashSet<string> ValidTagSet = new HashSet<string>();
         HashSet<char> CharSet = new HashSet<char>();
-        private void BrowseFolder()
+
+        private void Init()
         {
-            string rootPath = @"D:\WorkFolder\Transcripts\20201224\Input";
-            string blackListPath = @"D:\WorkFolder\Transcripts\20201224\BlackList.txt";
-            string validFilePath= @"D:\WorkFolder\Transcripts\20201224\Valid.txt";
-            string mappingPath = @"D:\WorkFolder\Transcripts\20201224\Mapping.txt";
-            Dictionary<string, MappingLine> mappingDict = new Dictionary<string, MappingLine>();
-            List<string> overallList = new List<string>();
-            List<string> validFileList = new List<string>();
-            int[] array = new int[14];
-            BlackList = File.ReadLines(blackListPath)
-                .Select(x => x.Split('\t')[0].ToLower())
-                .ToHashSet();
-            ReplaceArray= IO.ReadEmbed("OfflineAudioProcessingSystem.Internal.Data.HighFreqErrorTagReplacement.txt", "OfflineAudioProcessingSystem")
+            Logger.ErrorPath = @"";
+            ReplaceArray = IO.ReadEmbed("OfflineAudioProcessingSystem.Internal.Data.HighFreqErrorTagReplacement.txt", "OfflineAudioProcessingSystem")
                 .Select(x => (x.Split('\t')[0], x.Split('\t')[1]))
                 .ToArray();
-            ValidTagSet= IO.ReadEmbed("OfflineAudioProcessingSystem.Internal.Data.ValidTag.txt", "OfflineAudioProcessingSystem").ToHashSet();
-            mappingDict = File.ReadLines(mappingPath).ToDictionary(x => x.Split('\t')[0].ToLower(), x => new MappingLine(x));
-            foreach (string filePath in Directory.EnumerateFiles(rootPath, "*.txt", SearchOption.AllDirectories))
-            {
-                if (!mappingDict.ContainsKey(filePath.ToLower()))
-                    continue;
-                var line = mappingDict[filePath.ToLower()];
-                
-                if (BlackList.Contains(filePath.ToLower()))
-                    continue;
-                int hresult = ValidateFile(filePath, line);
-                if (hresult != 1 && hresult != 6)
-                    overallList.Add($"{hresult}\t{filePath}");
-                if (hresult != -1)
-                    array[hresult]++;
-
-                if (hresult == 0)
-                    validFileList.Add(filePath);
-
-            }
-            File.WriteAllLines(validFilePath, validFileList);
+            ValidTagSet = IO.ReadEmbed("OfflineAudioProcessingSystem.Internal.Data.ValidTag.txt", "OfflineAudioProcessingSystem").ToHashSet();
         }
-        private int ValidateFile(string filePath, MappingLine mappingLine)
+        private void ProcessFolder(string outputRootPath, string mappingPath)
+        {
+            foreach(var line in File.ReadLines(mappingPath).Select(x=>new MappingLine(x)))
+            {
+                OutputFile(outputRootPath, line.LocalPath, line);
+            }
+        }
+        private void ValidateFolder(string inputRootPath)
+        {            
+            foreach (string filePath in Directory.EnumerateFiles(inputRootPath, "*.txt", SearchOption.AllDirectories))
+                ValidateFile(filePath);
+        }
+        string[] TransErrorArray =
+        {
+            "Empty file.",              //  1
+            "Missing time stamp.",      //  2
+            "Time stamp format error.", //  3
+            "Wrong speaker Id.",        //  4
+            "Wrong dialect fix.",       //  5        
+            "Unfinished.",              //  6
+            "Empty content.",           //  7
+            "Line count is not even.",  //  8
+            "Time stamp mismatch.",     //  9
+            "Content with speaker Id.", //  10
+            "Content with dialect tag.",    //  11
+            "Content with incomplete tag.", //  12
+            "Invalid char.",            //  13
+        };
+        
+        private List<TransLine> ValidateFile(string filePath)
         {
             var r = File.ReadAllLines(filePath);
             List<TransLine> list = new List<TransLine>();
             try
             {
-                Sanity.Requires(r.Length >2, "Empty file", 1);
+                Sanity.Requires(r.Length > 2, filePath, 1);
                 foreach (string s in r)
                 {
                     try
@@ -74,18 +72,19 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                         line.Content = ValidateContent(line.Content);
                         list.Add(line);
                     }
-                    catch(CommonException e)
+                    catch (CommonException e)
                     {
                         switch (e.HResult)
                         {
-                            case 10:
-                            case 11:
-                            case 12:
-                            case 13:
-                                Console.WriteLine($"{e.Message}\t{filePath}");
+                            case 10:    //Content with speaker id
+                            case 11:    //Content with dialect tag
+                            case 12:    //Content with incomplete tag
+                            case 13:    //Invalid char
+                                string content = $"{TransErrorArray[e.HResult]}\t{e.Message}\t{filePath}";
+                                Logger.WriteLine(content, false, true);                                
                                 break;
                             default:
-                                break;
+                                throw e;
                         }
                     }
                 }
@@ -93,7 +92,7 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                 ValidateTime(wavePath, list);
                 ValidateListPair(list);
             }
-            catch(CommonException e)
+            catch (CommonException e)
             {
                 switch (e.HResult)
                 {
@@ -106,34 +105,40 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                     case 7: //  Empty content.
                     case 8: //  Count is not even,
                     case 9: //  Time stamp mismatch,
-                        return e.HResult;
+                        string content = $"{TransErrorArray[e.HResult]}\t{e.Message}\t{filePath}";
+                        Logger.WriteLine(content, false, true);
+                        return null;
                     default:
-                        break;
+                        throw e;
                 }
             }
-            catch(Exception e)
+            catch (Exception e)
             {
-                return -1;
+                string content = $"{e.Message}\t{filePath}";
+                Logger.WriteLine(content, false, true);
+                return null;
             }
-            string outputRootPath = @"D:\WorkFolder\Transcripts\20201224\Output";
-            string name = $"{mappingLine.Dialect}_{mappingLine.SpeakerId}_{mappingLine.SpeakerId}";
+            return list;
+        }
+        private void OutputFile(string outputRootPath, string filePath, MappingLine mappingLine)
+        {
+            var list = ValidateFile(filePath);
+            string name = $"{mappingLine.Dialect.ToLower()}_{mappingLine.SpeakerId}_00000";
             string inputWavePath = filePath.ToLower().Replace(".txt", ".wav");
-            
-            string outputTextPath = Path.Combine(outputRootPath, name + ".txt");
-            string outputWavPath = Path.Combine(outputRootPath, name + ".wav");
+
+            string outputFolder = Path.Combine(outputRootPath, mappingLine.Dialect.ToLower());
+            Directory.CreateDirectory(outputFolder);
+            string outputTextPath = Path.Combine(outputFolder,  name + ".txt");
+            string outputWavPath = Path.Combine(outputFolder, name + ".wav");
 
             var outputList = list.Select(x => OutputTransLine(x));
             File.Copy(inputWavePath, outputWavPath, true);
             File.WriteAllLines(outputTextPath, outputList);
-            return 0;
-        }
-        private bool WithTimeStamp(string s)
-        {
-            return s.Contains('[') && s.Contains(']');
-        }
+        }        
 
         Regex TransLineReg = new Regex("^(\\[.*?\\])(.*)$", RegexOptions.Compiled);
-        Regex SpaceReg = new Regex("\\s+", RegexOptions.Compiled);      
+        Regex SpaceReg = new Regex("\\s+", RegexOptions.Compiled);
+        Regex ExtraSpaceReg = new Regex(">\\s+<", RegexOptions.Compiled);
 
         private TransLine ExtractLine(string s)
         {
@@ -147,7 +152,7 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
 
         private TransLine SetTimeStamp(string s, TransLine line)
         {
-            Sanity.Requires(TransLineReg.IsMatch(s), "Missing time stamp", 2);
+            Sanity.Requires(TransLineReg.IsMatch(s), s.Substring(0, 30), 2);
             var groups = TransLineReg.Match(s).Groups;
             string timeStampString = groups[1].Value;
 
@@ -160,15 +165,15 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                 double endTime = double.Parse(endString);
                 line.StartTime = startTime;
                 line.EndTime = endTime;
-            }, new CommonException("Time stamp format error", 3));
+            }, new CommonException(s.Substring(0, 30), 3));
             line.Content = groups[2].Value;
-            Sanity.Requires(!string.IsNullOrWhiteSpace(line.Content), "Empty in content", 7);
+            Sanity.Requires(!string.IsNullOrWhiteSpace(line.Content), "", 7);
             return line;
         }
         private TransLine SetSpeakerId(string s, TransLine line)
         {            
             string lower = s.ToLower();
-            Sanity.Requires(lower.StartsWith("s1") || lower.StartsWith("s2"), "Wrong speakerId", 4);
+            Sanity.Requires(lower.StartsWith("s1") || lower.StartsWith("s2"), line.StartTime.ToString(), 4);
             line.Speaker = s.Substring(0, 2).ToUpper();
             line.Content = s.Substring(2).Trim();
             return line;
@@ -203,7 +208,7 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                 line.Suffix = C_SUFFIX;
                 return line;                
             }
-            throw new CommonException(s, 5);
+            throw new CommonException(s.Substring(0, 30), 5);
         }
         private TransLine GetMiddle(string total, string prefix, string suffix, TransLine line)
         {
@@ -222,7 +227,7 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
 
             double maxTimeStamp = list.Max(x => x.EndTime);
 
-            Sanity.Requires(maxTimeStamp >= 0 && (audioLength - maxTimeStamp <= 10 || audioLength / maxTimeStamp <= 2), "Time mismatch", 6);
+            Sanity.Requires(maxTimeStamp >= 0 && (audioLength - maxTimeStamp <= 10 || audioLength / maxTimeStamp <= 2), wavePath, 6);
         }
         private string OutputTransLine(TransLine line)
         {
@@ -235,19 +240,19 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
             TransLine o = new TransLine { StartTime = double.MinValue, EndTime = double.MinValue + 1 };
             for(int i = 0; i * 2 < list.Count; i += 2)
             {
-                Sanity.Requires(list[i].EndTime > 0, "Time stamp mismatch", 9);
-                Sanity.Requires(list[i].StartTime == list[i + 1].StartTime && list[i].EndTime == list[i + 1].EndTime, "Time stamp mismatch.", 9);
-                Sanity.Requires(list[i].StartTime < list[i].EndTime, "Time stamp mismatch", 9);
-                Sanity.Requires(list[i].StartTime >= o.EndTime, "Time stamp mismatch", 9);
+                Sanity.Requires(list[i].EndTime > 0, list[i].EndTime.ToString(), 9);
+                Sanity.Requires(list[i].StartTime == list[i + 1].StartTime && list[i].EndTime == list[i + 1].EndTime, list[i].StartTime.ToString(), 9);
+                Sanity.Requires(list[i].StartTime < list[i].EndTime, list[i].StartTime.ToString(), 9);
+                Sanity.Requires(list[i].StartTime >= o.EndTime, list[i].StartTime.ToString(), 9);
             }
         }
 
         Regex TagReg = new Regex("<[^<]*?>", RegexOptions.Compiled);
                         
         private string ValidateContent(string content)
-        {            
-            Sanity.Requires(!content.ToLower().Contains("s1") && !content.ToLower().Contains("s2"), "Content with speaker id", 10);
-            Sanity.Requires(!content.ToLower().Contains("chdialects"), "Content with dialect tag", 11);
+        {
+            Sanity.Requires(!content.ToLower().Contains("s1") && !content.ToLower().Contains("s2"), content.Substring(0, 30), 10);
+            Sanity.Requires(!content.ToLower().Contains("chdialects"), content.Substring(0, 30), 11);
             foreach (var replace in ReplaceArray)
                 content = content.Replace(replace.Item1, replace.Item2);
             content = content.Replace("?", "<questionmark>")
@@ -257,10 +262,12 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                 .Replace("!", "<fullstop>")
                 .Replace("´", "'");
 
-            var regs = GetTags(content);
-            TagSet.UnionWith(regs);
+            var localTags = GetTags(content).ToArray();
+            var diff = localTags.Except(ValidTagSet);
+            Sanity.Requires(diff.Count() == 0, content.Substring(0, 30), 12);
+            TagSet.UnionWith(localTags);
             string rawContent = TagReg.Replace(content, " ");
-            Sanity.Requires(!rawContent.Contains('<') && !rawContent.Contains('>'), "Content with incomplete tag", 12);
+            Sanity.Requires(!rawContent.Contains('<') && !rawContent.Contains('>'), content.Substring(0, 30), 12);
             foreach(char c in rawContent)
             {
                 if (c >= 'A' && c <= 'Z')
@@ -271,7 +278,7 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                     continue;
                 if (c == ' ' || c == '-' || c == '\'')
                     continue;                
-                throw new CommonException($"Invalid char {c}", 13);
+                throw new CommonException($"{c}", 13);
             }
             CharSet.UnionWith(rawContent);
             content = CleanupSpace(content);
@@ -283,36 +290,12 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
             return TagReg.Matches(content).Cast<Match>().Select(x => x.Groups[0].Value);
         }
 
-        private MappingLine GenerateMappingLine(string s)
-        {
-            var split = s.Split('\t');
-            string taskInternalName = split[0].Split('\\').Last().Replace(".txt", "");
-            string dialect = split[1].ToLower();
-            string gender = split[3].ToLower();
-            int age = int.Parse(split[4]);
-            string azureFolder = split[5];
-            string azurePath = AzureUtils.SetDataUri(AzureUtils.PathCombine(azureFolder, taskInternalName.Replace(' ','+')+".wav"));
-
-            string azureName = AzureUtils.BlobExists(azurePath) ?
-                AzureUtils.GetShort( azurePath) :
-                "";
-            return new MappingLine
-            {
-                AzureName = azureName,
-                TaskId = "",
-                TaskInternalName = taskInternalName,
-                Dialect = dialect,
-                SpeakerId = "",
-                Gender = gender,
-                Age = age,
-            };
-        }
-
         private string CleanupSpace(string content)
         {
             content = content.Replace("<", " <").Replace(">", "> ");
+            content = ExtraSpaceReg.Replace(content, "><");
             content = SpaceReg.Replace(content, " ").Trim();
-            content = content.Replace("> <", "><");
+            
             return content;
         }
     }  
@@ -355,12 +338,12 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
         {
             LocalPath = split[0];
             AzureName = split[1];
-            TaskId = split[3];
-            TaskInternalName = split[4];
-            Dialect = split[5];
-            SpeakerId = split[6];
-            Gender = split[7];
-            Age = int.Parse(split[8]);
+            TaskId = split[2];
+            TaskInternalName = split[3];
+            Dialect = split[4];
+            SpeakerId = int.Parse(split[5]).ToString("00000");
+            Gender = split[6];
+            Age = int.Parse(split[7]);
         }
     }
 }
