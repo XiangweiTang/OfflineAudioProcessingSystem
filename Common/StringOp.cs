@@ -35,5 +35,15 @@ namespace Common
                 return path;
             return $"\"{path}\"";
         }
+        public static string GetFirstNPart(this string s, char sep, int n = 0)
+        {
+            var split = s.TrimStart(sep).Split(sep);
+            return split[n];
+        }
+        public static string GetLastNPart(this string s, char sep, int n = 1)
+        {
+            var split = s.TrimEnd(sep).Split(sep);
+            return split[split.Length - n];
+        }
     }
 }

@@ -1,0 +1,7 @@
+﻿.*basel.*	basel
+.*bern.*	bern
+.*chur.*	chur
+.*luzern.*	luzern
+.*gallen.*	stgallen
+.*visp.*	visp
+.*z.*rich.*	zurich

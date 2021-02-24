@@ -14,21 +14,26 @@ namespace OfflineAudioProcessingSystem.AudioTransfer
         Dictionary<string, string> Dict = new Dictionary<string, string>();
         List<string> TotalReportList = new List<string>();
         List<string> TotalErrorList = new List<string>();
+        Dictionary<string, string> LocaleRegDict = new Dictionary<string, string>();
         protected override void LoadConfig(string configPath)
         {
             Cfg.Load(configPath);
         }
-        private void GetNamingDict()
+        private void Init()
         {
             Dict = IO.ReadEmbed($"{LocalConstants.LOCAL_ASMB_NAME}.Internal.Data.FolderNameMapping.txt", LocalConstants.LOCAL_ASMB_NAME)
                 .ToDictionary(x => x.Split('\t')[0], x => x.Split('\t')[1]);
+            LocaleRegDict= IO.ReadEmbed($"{LocalConstants.LOCAL_ASMB_NAME}.Internal.Data.LocaleRegexMapping.txt", LocalConstants.LOCAL_ASMB_NAME)
+                .ToDictionary(x => x.Split('\t')[0], x => x.Split('\t')[1]);
         }
+
+        //public void OneOffRun(string inputUri, string outputRootFolder, )
         protected override void Run()
         {
-            GetNamingDict();
+            Init();
             TotalReportList.Add("Original name\tWave name\tDuration(s)");
             foreach (string subPath in Cfg.InputAzureFolderPathArray)
-                TransferFromAzureToAzure(AzureUtils.SetDataUri(subPath), Cfg.OutputAzureRootFolderPath, Cfg.DailyRootFolderPath);
+                TransferFromAzureToAzure(AzureUtils.GetFullUriString(subPath), Cfg.OutputAzureRootFolderPath, Cfg.DailyRootFolderPath);
             string errorPath = Cfg.ReportRootFolderPath + ".error";
             string reportPath = Cfg.ReportRootFolderPath + ".log";
             File.WriteAllLines(errorPath, TotalErrorList);
@@ -61,21 +66,54 @@ namespace OfflineAudioProcessingSystem.AudioTransfer
             Download(inputAzureUri, downloadFolder);
 
             CheckAndTransfer(reportFilePath, errorFilePath, downloadFolder, intermediaFolder, uploadFolder);
+            Copy(uploadFolder, localDailyFolder);
 
-            UploadAndCopy(uploadFolder, outputAzureUri, localDailyFolder);
+            Upload(uploadFolder, outputAzureUri);
         }
-
+        public void NewDownload(string rootUri, string blobContainerName,string rootPath)
+        {
+            foreach(string localeUri in AzureUtils.ListDirectories(rootUri,blobContainerName))
+            {
+                string locale;
+                try
+                {
+                    locale = localeUri.GetLastNPart('/');
+                }
+                catch
+                {
+                    continue;
+                }
+                foreach(string timeStampUri in AzureUtils.ListDirectories(localeUri, blobContainerName))
+                {
+                    string timeStamp = timeStampUri.GetLastNPart('/');
+                    DateTime dt = DateTime.Parse(timeStamp);
+                    timeStamp = dt.ToString("yyyyMMdd");
+                    foreach (string speakerIdUri in AzureUtils.ListDirectories(timeStampUri, blobContainerName))
+                    {
+                        string speakerId = timeStampUri.GetLastNPart('/');
+                        string localFolderPath = Path.Combine(rootPath, locale, timeStamp, speakerId);
+                        Directory.CreateDirectory(localFolderPath);
+                        foreach (string azureFilePath in AzureUtils.ListCurrentBlobs(speakerIdUri, blobContainerName))
+                        {
+                            string fileName = azureFilePath.GetLastNPart('/');
+                            string localFilePath = Path.Combine(localFolderPath, fileName);
+                            AzureUtils.DownloadFile(azureFilePath, localFilePath);
+                        }
+                    }
+                }
+            }
+        }
         private void Download(string inputAzureUri, string downloadFolder)
         {
             foreach (string azureFileName in AzureUtils.ListCurrentBlobs(inputAzureUri))
             {
                 string fileName = azureFileName.Split('/').Last();
                 string localPath = Path.Combine(downloadFolder, fileName);
-                AzureUtils.Download(azureFileName, localPath);
+                AzureUtils.DownloadFile(azureFileName, localPath);
             }
         }
 
-        private void CheckAndTransfer(string reportPath, string errorPath, string downloadFolder, string intermediaFolder, string uploadFolder)
+        public void CheckAndTransfer(string reportPath, string errorPath, string downloadFolder, string intermediaFolder, string uploadFolder)
         {
             AudioFolderTransfer aft = new AudioFolderTransfer(reportPath, Cfg.ExistringFileListPath, errorPath, intermediaFolder)
             {
@@ -88,7 +126,7 @@ namespace OfflineAudioProcessingSystem.AudioTransfer
             TotalErrorList.AddRange(aft.ErrorList);
         }
 
-        private void UploadAndCopy(string uploadFolder, string outputAzureUri, string localDailyFolder)
+        private void Upload(string uploadFolder, string outputAzureUri)
         {
             foreach (string localFilePath in Directory.EnumerateFiles(uploadFolder))
             {
@@ -96,10 +134,12 @@ namespace OfflineAudioProcessingSystem.AudioTransfer
                 string uploadFileName = AzureUtils.PathCombine(outputAzureUri, fileName);
                 AzureUtils.Upload(localFilePath, uploadFileName);
             }
-
+        }     
+        private void Copy(string uploadFolder, string localDailyFolder)
+        {
             FolderCopy fc = new FolderCopy();
             fc.Run(uploadFolder, localDailyFolder);
-        }        
+        }
     }
 
     class AudioFolderTransfer : FolderTransfer
@@ -133,15 +173,19 @@ namespace OfflineAudioProcessingSystem.AudioTransfer
             ExistingFileDict = File.ReadLines(ExistingFileListPath)
                 .ToDictionary(x => x.Split('\t')[1], x => x.Split('\t')[0]);
         }
+        
         protected override void ItemTransfer(string inputPath, string outputPath)
         {
             string intermediaPath = Path.Combine(WorkFolder, Guid.NewGuid() + ".wav");
             try
             {
                 if (ExistingFileDict.ContainsKey(outputPath))
+                {
+                    Console.WriteLine($"File exists: {outputPath}");
                     return;
+                }
                 string ext = inputPath.Split('.').Last().ToLower();
-                if (ext.ToLower() == "ds_store")
+                if (ext.ToLower() == "ds_store" || ext.ToLower() == "pdf")
                     return;
                 Sanity.Requires(ValidExtSet.Contains(ext), $"Invalid extension: {ext}");
                 ConvertToWave(inputPath, intermediaPath, outputPath);
@@ -174,6 +218,10 @@ namespace OfflineAudioProcessingSystem.AudioTransfer
                             File.Delete(outputTimeStampPath);
                         LocalCommon.SetTimeStampsWithVad(outputPath, outputTimeStampPath);
                         Sanity.Requires(File.Exists(outputTimeStampPath));
+                        string outputTextGridPath = outputPath.Replace(".wav", ".textgrid");
+                        if (File.Exists(outputTextGridPath))
+                            File.Delete(outputTextGridPath);
+                        TextGrid.TimeStampToTextGrid(outputTimeStampPath, outputTextGridPath);
                     }
                     catch
                     {
@@ -207,10 +255,11 @@ namespace OfflineAudioProcessingSystem.AudioTransfer
             LocalCommon.SetAudioWithFfmpeg(inputPath.WrapPath(), SampleRate, NumChannels, outputPath.WrapPath());
         }
 
+        
         public override string ItemRename(string inputItemName)
         {
             FileInfo file = new FileInfo(inputItemName);
-            return file.Name.Replace(file.Extension, ".wav");
+            return file.Name.Replace(file.Extension, ".wav").Replace("..", ".").Replace("%3A", "_");
         }
 
         protected override void PostRun()

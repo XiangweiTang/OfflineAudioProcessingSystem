@@ -4,7 +4,7 @@
     <Name>Bobo</Name>
   </HelloWorld>
   <AudioTransfer>
-    <Input>
+    <Input BlobContainerName="2021">
       <AzureFolder Path="300hrs data acquisition/St.Gallen/St.Gallen 06.01.2021 Yasmin/"/>
       <AzureFolder Path="300hrs data acquisition/Zurich/Zürich 30-1.2020 F/"/>
     </Input>    

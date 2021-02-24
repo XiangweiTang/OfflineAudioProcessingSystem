@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Common;
 using System.IO;
+using System.Text.RegularExpressions;
 
 namespace OfflineAudioProcessingSystem
 {
@@ -14,6 +15,12 @@ namespace OfflineAudioProcessingSystem
         public static string FfmpegPath { get; set; }
         public static string VadScriptPath { get; set; }
         public static string PythonPath { get; set; }
+        private static HashSet<(string, string)> LocaleRegStringSet = new HashSet<(string, string)>();
+        static LocalCommon()
+        {
+            LocaleRegStringSet = IO.ReadEmbed("OfflineAudioProcessingSystem.Internal.Data.LocaleRegexMapping.txt", "OfflineAudioProcessingSystem")
+                .Select(x => (x.Split('\t')[0], x.Split('\t')[1])).ToHashSet();
+        }
         public static void RunFfmpeg(string arguments)
         {
             RunFile.Run(FfmpegPath, arguments, false, "");
@@ -55,7 +62,7 @@ namespace OfflineAudioProcessingSystem
         public static void SetTimeStampsWithVad(string inputAudioPath, string outputTimeStampFilePath)
         {
             // The python was from: https://github.com/wiseman/py-webrtcvad
-            RunFile.RunPython(PythonPath, VadScriptPath, "1", inputAudioPath.WrapPath(), outputTimeStampFilePath.WrapPath());
+            RunFile.RunPython(PythonPath, VadScriptPath, "2", inputAudioPath.WrapPath(), outputTimeStampFilePath.WrapPath());
         }
 
         public static bool BinaryIdentical(Stream fs1, int offset1, Stream fs2, int offset2)
@@ -114,6 +121,60 @@ namespace OfflineAudioProcessingSystem
             {
                 return BinaryIdentical(fs1, offset1, fs2, offset2);
             }
+        }
+        public static IEnumerable<string> AudioIdenticalLocal(IEnumerable<string> newWaveList, IEnumerable<string> oldWaveList)
+        {
+            Dictionary<long, HashSet<string>> dupeDict = new Dictionary<long, HashSet<string>>();
+            foreach(string oldWavePath in oldWaveList)
+            {
+                Wave w = new Wave();
+                w.ShallowParse(oldWavePath);
+                long key = w.DataChunk.Length;
+                if (!dupeDict.ContainsKey(key))
+                    dupeDict[key] = new HashSet<string> { oldWavePath };
+                else
+                    dupeDict[key].Add(oldWavePath);
+            }
+
+
+            foreach(string newWavePath in newWaveList)
+            {
+                Wave w = new Wave();
+                w.ShallowParse(newWavePath);
+                long key = w.DataChunk.Length;
+                if (!dupeDict.ContainsKey(key))
+                    dupeDict[key] = new HashSet<string> { newWavePath };
+                else
+                {                    
+                    foreach(string oldWavPath in dupeDict[key])
+                    {
+                        if (AudioIdenticalLocal(newWavePath, oldWavPath))
+                        {                            
+                            yield return $"{newWavePath}\t{oldWavPath}";
+                            break;
+                        }                        
+                    }
+
+                    dupeDict[key].Add(newWavePath);
+                }
+            }
+        }
+        public static string GetLocale(string s)
+        {
+            foreach(var pair in LocaleRegStringSet)
+            {
+                Regex reg = new Regex(pair.Item1);
+                if (reg.IsMatch(s.ToLower()))
+                    return pair.Item2;
+            }
+            throw new CommonException(s, -1);
+        }
+
+        public static string BasicCleanup(string s)
+        {
+            return s.Replace(",", "<comma>")
+                .Replace(".", "<fullstop>")
+                .Replace("?", "<questionmark>");
         }
     }
 }

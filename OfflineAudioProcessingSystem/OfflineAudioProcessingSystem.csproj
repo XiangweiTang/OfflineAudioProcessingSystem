@@ -48,10 +48,12 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Common\TextGrid.cs" />
     <Compile Include="Config.cs" />
     <Compile Include="ConfigHelper.cs" />
     <Compile Include="Feature.cs" />
     <Compile Include="Features\AudioTransfer\AudioTransfer.cs" />
+    <Compile Include="Features\AudioTransfer\AudioTransferNew.cs" />
     <Compile Include="Features\AudioTransfer\ConfigAudioTransfer.cs" />
     <Compile Include="Features\HelloWorld\ConfigHelloWorld.cs" />
     <Compile Include="Features\HelloWorld\HelloWorld.cs" />
@@ -88,6 +90,14 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Internal\Data\FolderNameMapping.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Internal\Data\LocaleRegexMapping.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Internal\Data\TextGridBody.txt" />
+    <EmbeddedResource Include="Internal\Data\TextGridHeader.txt" />
+    <EmbeddedResource Include="Internal\Data\TextGridItemHeader.txt" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

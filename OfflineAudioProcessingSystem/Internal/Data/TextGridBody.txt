@@ -1,0 +1,4 @@
+﻿        intervals [{0}]:
+            xmin = {1} 
+            xmax = {2}
+            text = ""

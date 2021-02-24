@@ -13,26 +13,42 @@ namespace Common
 {
     public static class AzureUtils
     {
-        public const string BLOB_CONTAINER_NAME= "/dechcollections/";
-        public static readonly string SAS_TOKEN = "";
+
+        private static Dictionary<string, string> SasTokenDict = new Dictionary<string, string>();        
         static AzureUtils()
         {
-            SAS_TOKEN= File.ReadAllText(@"C:\Files\Azure\SASToken.txt").Trim();
+            SasTokenDict = File.ReadLines(@"C:\Files\Azure\SASToken.txt")
+                .ToDictionary(x => x.Split('\t')[0], x => x.Split('\t')[1]);
         }
-        public static string SetDataUri(string uriString, string  blob_Container_name= BLOB_CONTAINER_NAME)
+        public static void Test()
         {
-            if (uriString.StartsWith("https://"))
+            string uriString = "https://marksystemapistorage.blob.core.windows.net/chdelivery2021/";
+            string uriWithSas = SetSasToken(uriString);
+            Uri uri = new Uri(uriWithSas);
+            BlobContainerClient client = new BlobContainerClient(uri, new BlobClientOptions { });
+            var r = client.Exists().Value;
+        }
+        public static string SetSasToken(string fullUriString)
+        {
+            Uri uri = new Uri(fullUriString);
+            string blobContainer = uri.LocalPath.GetFirstNPart('/', 0);
+            string sasToken = SasTokenDict[blobContainer];
+            return $"{fullUriString}{sasToken}";
+        }
+        public static string GetFullUriString(string uriString, string blobContainerName="")
+        {
+            if (IsValidFullUri(uriString))
                 return uriString;
-            return PathCombine($"https://marksystemapistorage.blob.core.windows.net{blob_Container_name}", uriString);
+            return PathCombine($"{Constants.AZURE_ROOT_PATH}{uriString}", uriString);
         }
-        public static List<string> ListDirectories(string uriString, string blobContainerName=BLOB_CONTAINER_NAME)
+        public static List<string> ListDirectories(string blobString, string blobContainerName="")
         {
-            Uri tmpUri = new Uri(uriString);
-            string prefix = tmpUri.LocalPath.Substring(blobContainerName.Length);
+            Uri tmpUri = new Uri(blobString);
+            string prefix = tmpUri.LocalPath.Substring(blobString.Length);
 
-            Uri uri = new Uri($"https://{tmpUri.Host}{blobContainerName}");
+            Uri uri = new Uri($"https://{tmpUri.Host}{blobString}");
             BlobContainerClient client = new BlobContainerClient(uri);
-
+            
             var pages = client.GetBlobsByHierarchy(prefix: prefix, delimiter: "/").AsPages();
             List<string> list = new List<string>();
             foreach(Page<BlobHierarchyItem> page in pages)
@@ -41,12 +57,12 @@ namespace Common
             }
             return list;
         }
-        public static List<string> ListCurrentBlobs(string uriString, string blobContainerName=BLOB_CONTAINER_NAME)
+        public static List<string> ListCurrentBlobs(string blobString, string blobContainerName="")
         {
-            Uri tmpUri = new Uri(uriString);
-            string prefix = tmpUri.LocalPath.Substring(blobContainerName.Length);
+            Uri tmpUri = new Uri(blobString);
+            string prefix = tmpUri.LocalPath.Substring(blobString.Length);
 
-            Uri uri = new Uri($"https://{tmpUri.Host}{blobContainerName}");
+            Uri uri = new Uri($"https://{tmpUri.Host}{blobString}");
             BlobContainerClient client = new BlobContainerClient(uri);
             var pages = client.GetBlobs(prefix: prefix).AsPages();
 
@@ -66,23 +82,23 @@ namespace Common
 
         
 
-        public static void Download(string uriString, string localPath)
+        public static void DownloadFile(string uriString, string localPath)
         {
             Uri uri = new Uri(uriString);
             BlobClient client = new BlobClient(uri);
             client.DownloadTo(localPath);
         }
-
-        public static void Upload(string localPath, string uriString)
+        public static void Upload(string localPath, string uriString, string blobContainerName= "/dechcollections/")
         {
-            Uri uri = new Uri(uriString + SAS_TOKEN);
+            string fullUriString = GetFullUriString(uriString, blobContainerName);
+            Uri uri = new Uri(fullUriString + SasTokenDict[blobContainerName]);
             BlobClient client = new BlobClient(uri);
             client.Upload(localPath);
-        }
-
-        public static void Delete(string uriString)
+        }        
+        public static void Delete(string uriString, string blobContainerName)
         {
-            Uri uri = new Uri(uriString + SAS_TOKEN);
+            string uriFullString = GetFullUriString(uriString, blobContainerName);
+            Uri uri = new Uri(uriFullString + SasTokenDict[blobContainerName]);
             BlobClient client = new BlobClient(uri);
             client.Delete();
         }
@@ -107,5 +123,10 @@ namespace Common
             BlobClient client = new BlobClient(uri);
             return client.Exists();
         }
+
+        public static bool IsValidFullUri(string uri)
+        {
+            return uri.StartsWith(Constants.AZURE_ROOT_PATH);
+        }        
     }
 }
