@@ -13,16 +13,19 @@ namespace OfflineAudioProcessingSystem
     {
         public static bool Reject { get; private set; } = false;
         public static List<string> AllList = new List<string>();
+        const double DIFF_THRESHOLD = 1;
         public static void Test()
         {
         }
-        public static void TextGridToText(string textGridPath, string textPath)
+        public static void TextGridToText(string textGridPath, string textPath, string sgIntermeidaPath, string hgIntermediaPath)
         {
             Reject = false;
             AllList = new List<string>();
             var textgridTextList = File.ReadLines(textGridPath);
             var textList = GetIntervalsNew(textgridTextList);
-            var outputList = MergeIntervals(textList).ToArray();
+            OutputIntermediaIntervals(textList, sgIntermeidaPath, hgIntermediaPath);
+
+            var outputList = MergeIntermediaIntervals(sgIntermeidaPath, hgIntermediaPath).ToArray();
             if (outputList.Length == 0)
             {
                 AllList.Add($"Empty\t{textGridPath}");
@@ -32,6 +35,50 @@ namespace OfflineAudioProcessingSystem
         }
         static Regex SpaceReg = new Regex("\\s+", RegexOptions.Compiled);
         static Regex IntervalReg = new Regex("\\s*intervals\\s*\\[[0-9]+\\]:", RegexOptions.Compiled);
+
+        private static void OutputIntermediaIntervals(IEnumerable<TextGridInterval> sequence, string sgPath, string hgPath)
+        {
+            List<TextGridInterval> hgList = new List<TextGridInterval>();
+            List<TextGridInterval> sgList = new List<TextGridInterval>();
+            foreach (var interval in sequence)
+            {
+                string content = GetContent(interval);
+                if (!string.IsNullOrEmpty(content) && GetRaw(content) != "<unknown/>")
+                {
+                    if (interval.Item == SG_TAG)
+                        sgList.Add(interval);
+                    else
+                        hgList.Add(interval);
+                }
+            }
+            var hg = hgList.Select(x =>
+            {
+                x.Content = GetContent(x);
+                return new TextGridLine(x).Output();
+            });
+            var sg = sgList.Select(x =>
+            {
+                x.Content = GetContent(x);
+                return new TextGridLine(x).Output();
+            });
+            File.WriteAllLines(sgPath, sg);
+            File.WriteAllLines(hgPath, hg);
+        }
+
+        private static IEnumerable<string> MergeIntermediaIntervals(string sgPath, string hgPath)
+        {
+            var sgList = File.ReadLines(sgPath).Select(x => new TextGridLine(x)).ToArray();
+            var hgList = File.ReadLines(hgPath).Select(x => new TextGridLine(x)).ToArray();
+            Sanity.Requires(hgList.Length == sgList.Length, "Interval count mismatch.");
+            for(int i = 0; i < sgList.Length; i++)
+            {
+                double diff1 = Math.Abs(double.Parse(sgList[i].XMin) - double.Parse(hgList[i].XMin));
+                double diff2 = Math.Abs(double.Parse(sgList[i].XMax) - double.Parse(hgList[i].XMax));
+                Sanity.Requires(diff1 <= 1 && diff2 <= 1, "Time stamp mismatch.");
+                yield return sgList[i].OutputSpecific();
+                yield return hgList[i].OutputSpecific();
+            }
+        }
         private static IEnumerable<string> MergeIntervals(IEnumerable<TextGridInterval> sequence)
         {
             List<TextGridInterval> hgList = new List<TextGridInterval>();
@@ -52,7 +99,7 @@ namespace OfflineAudioProcessingSystem
             {
                 double diff1 = Math.Abs(double.Parse(sgList[i].XMin) - double.Parse(hgList[i].XMin));
                 double diff2 = Math.Abs(double.Parse(sgList[i].XMax) - double.Parse(hgList[i].XMax));
-                Sanity.Requires(diff1 <= 0.1 && diff2 <= 0.1, "Time stamp mismatch.");
+                Sanity.Requires(diff1 <= DIFF_THRESHOLD && diff2 <= DIFF_THRESHOLD, "Time stamp mismatch.");
                 foreach (string s in OutputInterval(sgList[i], hgList[i]))
                     yield return s;
             }
@@ -204,5 +251,41 @@ namespace OfflineAudioProcessingSystem
         public string XMax { get; set; }
         public string Item { get; set; }
         public string Content { get; set; }
+    }
+
+    class TextGridLine : Line
+    {
+        public string XMin { get; set; }
+        public string XMax { get; set; }
+        public string Item { get; set; }
+        public string Content { get; set; }
+        public TextGridLine(string s) : base(s) { }
+        public TextGridLine(TextGridInterval interval)
+        {
+            XMin = interval.XMin;
+            XMax = interval.XMax;
+            Item = interval.Item;
+            Content = interval.Content;
+        }
+        protected override IEnumerable<object> GetLine()
+        {
+            yield return XMin;
+            yield return XMax;
+            yield return Item;
+            yield return Content;
+        }
+
+        protected override void SetLine(string[] split)
+        {
+            XMin = split[0];
+            XMax = split[1];
+            Item = split[2];
+            Content = split[3];
+        }
+
+        public string OutputSpecific()
+        {
+            return $"[{XMin} {XMax}] S1 <{Item}> {Content} <{Item}/>";
+        }
     }
 }

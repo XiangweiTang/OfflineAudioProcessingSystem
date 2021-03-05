@@ -72,7 +72,7 @@ namespace OfflineAudioProcessingSystem.AudioTransfer
         }
         public void NewDownload(string rootUri, string blobContainerName,string rootPath)
         {
-            foreach(string localeUri in AzureUtils.ListDirectories(rootUri,blobContainerName))
+            foreach(string localeUri in AzureUtils.ListCurrentDirectories(rootUri))
             {
                 string locale;
                 try
@@ -83,17 +83,17 @@ namespace OfflineAudioProcessingSystem.AudioTransfer
                 {
                     continue;
                 }
-                foreach(string timeStampUri in AzureUtils.ListDirectories(localeUri, blobContainerName))
+                foreach(string timeStampUri in AzureUtils.ListCurrentDirectories(localeUri))
                 {
                     string timeStamp = timeStampUri.GetLastNPart('/');
                     DateTime dt = DateTime.Parse(timeStamp);
                     timeStamp = dt.ToString("yyyyMMdd");
-                    foreach (string speakerIdUri in AzureUtils.ListDirectories(timeStampUri, blobContainerName))
+                    foreach (string speakerIdUri in AzureUtils.ListCurrentDirectories(timeStampUri))
                     {
                         string speakerId = timeStampUri.GetLastNPart('/');
                         string localFolderPath = Path.Combine(rootPath, locale, timeStamp, speakerId);
                         Directory.CreateDirectory(localFolderPath);
-                        foreach (string azureFilePath in AzureUtils.ListCurrentBlobs(speakerIdUri, blobContainerName))
+                        foreach (string azureFilePath in AzureUtils.ListCurrentBlobs(speakerIdUri))
                         {
                             string fileName = azureFilePath.GetLastNPart('/');
                             string localFilePath = Path.Combine(localFolderPath, fileName);

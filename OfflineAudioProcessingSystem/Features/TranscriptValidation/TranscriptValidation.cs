@@ -24,12 +24,13 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
         }
         public void Test()
         {
-            
+            string s = "[5 9.75]S1 <chdialects-converted> Guten Tag <comma> ist <UNKNOWN> Ihr Vater <questionmark><chdialects-converted> ";
+            var r = ExtractLine(s, 0);
         }
-        public void RunValidation()
+        public void RunValidation(string specificPath="")
         {
             Init();
-            ValidateFolder(InputRootPath);            
+            ValidateFolder(InputRootPath, specificPath);            
             File.WriteAllLines(AllPath, FullList);
         }
         public void RunUpdate(HashSet<string> set, bool create = false)
@@ -63,12 +64,12 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                 OutputFile(outputRootPath, line.LocalPath, line);
             }
         }
-        private void ValidateFolder(string inputRootPath)
+        private void ValidateFolder(string inputRootPath, string specificPath="")
         {
             foreach (string filePath in Directory.EnumerateFiles(inputRootPath, "*.txt", SearchOption.AllDirectories))
             {
-                ValidateFile(filePath);
-                ValidateFileAll(filePath);
+                ValidateFile(filePath, specificPath);
+                ValidateFileAll(filePath,specificPath);
             }
         }
 
@@ -148,21 +149,28 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                 Directory.CreateDirectory(outputTaskFolder);
                 foreach (string tgFilePath in Directory.EnumerateFiles(taskFolder))
                 {
-                    FileInfo tgfile = new FileInfo(tgFilePath);
-                    string fileName = tgfile.Name.Replace(tgfile.Extension, "");
-                    string wavePath = Path.Combine(audioTaskFolder, fileName + ".wav");
-                    string outputTextFilePath = Path.Combine(outputTaskFolder, fileName + ".txt");
-                    string outputWaveFilePath = Path.Combine(outputTaskFolder, fileName + ".wav");
-                    TextGrid.TextGridToText(tgFilePath, outputTextFilePath);
-                    if (!TextGrid.Reject)
+                    try
                     {
-                        if (File.Exists(outputWaveFilePath))
-                            File.Delete(outputWaveFilePath);
-                        File.Copy(wavePath, outputWaveFilePath);
-                    }
-                    else
+                        string fileName = tgFilePath.GetFileName().Item1;
+                        string wavePath = Path.Combine(audioTaskFolder, fileName + ".wav");
+                        string outputTextFilePath = Path.Combine(outputTaskFolder, fileName + ".txt");
+                        string outputWaveFilePath = Path.Combine(outputTaskFolder, fileName + ".wav");
+                        string sgPath = Path.Combine(outputTaskFolder, fileName + ".txt.sg");
+                        string hgPath = Path.Combine(outputTaskFolder, fileName + ".txt.hg");
+                        TextGrid.TextGridToText(tgFilePath, outputTextFilePath, sgPath,hgPath);
+                        if (!TextGrid.Reject)
+                        {
+                            if (File.Exists(outputWaveFilePath))
+                                File.Delete(outputWaveFilePath);
+                            File.Copy(wavePath, outputWaveFilePath);
+                        }
+                        else
+                        {
+                            reportList.AddRange(TextGrid.AllList.Select(x => $"{tgFilePath}\t{x}"));
+                        }
+                    }catch(CommonException ce)
                     {
-                        reportList.AddRange(TextGrid.AllList.Select(x => $"{tgFilePath}\t{x}"));
+                        Console.WriteLine(tgFilePath + "\t" + ce.Message);
                     }
                 }
             }
@@ -232,21 +240,26 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
         };
 
         string TimeStampString = "";
-        private void ValidateFileAll(string filePath)
+        private void ValidateFileAll(string filePath, string specificPath="")
         {
+            if (filePath == specificPath)
+                ;
             var r = File.ReadLines(filePath).Where(x => !string.IsNullOrWhiteSpace(x)).ToArray();
             string taskNameContent = GetTaskFormat(filePath);
             List<TransLine> list = new List<TransLine>();
             try
             {
                 Sanity.Requires(r.Length > 2, filePath, 1);
-                foreach(string s in r)
+                int i = 0;
+                foreach (string s in r)
                 {
                     TransLine line = new TransLine();
                     TimeStampString = "";
+                    
                     try
                     {
-                        line = ExtractLine(s);
+                        line = ExtractLine(s,i);
+                        i++;
                         line.Content = ValidateContent(line.Content);
                         list.Add(line);
                     }
@@ -263,18 +276,22 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                 FullList.Add(content);
             }
         }
-        private List<TransLine> ValidateFile(string filePath)
+        private List<TransLine> ValidateFile(string filePath, string specificPath="")
         {
+            if (filePath == specificPath)
+                ;
             var r = File.ReadLines(filePath).Where(x=>!string.IsNullOrWhiteSpace(x)).ToArray();
             List<TransLine> list = new List<TransLine>();
             try
             {
                 Sanity.Requires(r.Length > 2, filePath, 1);
+                int i = 0;
                 foreach (string s in r)
                 {
                     try
                     {
-                        var line = ExtractLine(s);
+                        var line = ExtractLine(s,i);
+                        i++;
                         line.Content = ValidateContent(line.Content);
                         list.Add(line);
                     }
@@ -352,13 +369,13 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
         Regex SpaceReg = new Regex("\\s+", RegexOptions.Compiled);
         Regex ExtraSpaceReg = new Regex(">\\s+<", RegexOptions.Compiled);
 
-        private TransLine ExtractLine(string s)
+        private TransLine ExtractLine(string s, int n)
         {
             s = SpaceReg.Replace(s, " ").Trim();
             TransLine line = new TransLine();
             line = SetTimeStamp(s, line);
             line = SetSpeakerId(line.Content, line);
-            line = SetDialectFix(line.Content, line);
+            line = SetDialectFix(line.Content, line, n);
             return line;
         }
 
@@ -394,9 +411,13 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                 line.Content = s;
                 return line;
             }
+            if (!lower.Contains("s1") && !lower.Contains("s2"))
+            {
+                line.Speaker = "S1";
+                line.Content = s;
+                return line;
+            }
             Sanity.Requires(lower.Contains("s1") || lower.Contains("s2"), line.StartTime.ToString(), 15);
-            if (!lower.StartsWith("s1") && lower.StartsWith("s2"))
-                ;
             Sanity.Requires(lower.StartsWith("s1") || lower.StartsWith("s2"), line.StartTime.ToString(), 4);
             line.Speaker = s.Substring(0, 2).ToUpper();
             line.Content = s.Substring(2).Trim();
@@ -406,8 +427,9 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
         const string O_SUFFIX = "<chdialects/>";
         const string C_PREFIX = "<chdialects-converted>";
         const string C_SUFFIX = "<chdialects-converted/>";
-        private TransLine SetDialectFix(string s, TransLine line)
+        private TransLine SetDialectFix(string s, TransLine line, int n)
         {
+            s = s.Trim();            
             if (s.Trim().ToLower() == "<unknown/>")
                 return line;
             string subContent = s.Substring(0, Math.Min(MAX_SHOW_COUNT, s.Length));
@@ -417,8 +439,8 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                 return GetMiddle(s, C_PREFIX, C_SUFFIX, line);
             if (s.StartsWith(O_PREFIX))
             {
-                if (!s.EndsWith(O_PREFIX))
-                    return SetDialectFix($"{s}{O_SUFFIX}", line);
+                if (!s.EndsWith(O_SUFFIX))
+                    return SetDialectFix($"{s}{O_SUFFIX}", line,n);
                 string middle = s.Replace(O_PREFIX, "").Trim();
                 line.Prefix = O_PREFIX;
                 line.Content = middle;
@@ -427,14 +449,26 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
             }
             if (s.StartsWith(C_PREFIX))
             {
-                if (!s.EndsWith(C_PREFIX))
-                    return SetDialectFix($"{s}{C_SUFFIX}", line);
+                if (!s.EndsWith(C_SUFFIX))
+                    return SetDialectFix($"{s}{C_SUFFIX}", line,n);
                 string middle = s.Replace(C_PREFIX, "").Trim();
                 line.Prefix = C_PREFIX;
                 line.Content = middle;
                 line.Suffix = C_SUFFIX;
                 return line;                
             }
+            //if(n%2==0)
+            //{
+            //    line.Prefix = O_PREFIX;
+            //    line.Suffix = O_SUFFIX;
+            //    return line;
+            //}
+            //else
+            //{
+            //    line.Prefix = C_PREFIX;
+            //    line.Suffix = C_SUFFIX;
+            //    return line;
+            //}
             throw new CommonException(subContent, 5);
         }
         private TransLine GetMiddle(string total, string prefix, string suffix, TransLine line)
@@ -498,6 +532,11 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                 .Replace("。", "<fullstop>")
                 .Replace("\"", " ")
                 .Replace("<unknown>","<UNKNOWN/>")
+                .Replace('\u00BB',' ')
+                .Replace('\u00AD',' ')
+                .Replace('(', ' ')
+                .Replace(')',' ')
+                .Replace('–',' ')
                 ;
             
 

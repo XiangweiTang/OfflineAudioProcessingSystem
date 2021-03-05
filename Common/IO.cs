@@ -50,5 +50,16 @@ namespace Common
                 return sr.ReadToEnd();
             }
         }
+
+        public static (string,string) GetFileName(this string filePath)
+        {
+            string fileName = filePath.Split('\\').Last();
+            int i = fileName.LastIndexOf('.');
+            if (i == -1)
+                return (fileName, "");
+            string rawName = fileName.Substring(0, i);
+            string ext = fileName.Substring(i);
+            return (rawName, ext);
+        }
     }
 }

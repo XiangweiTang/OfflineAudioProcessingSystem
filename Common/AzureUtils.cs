@@ -22,11 +22,6 @@ namespace Common
         }
         public static void Test()
         {
-            string uriString = "https://marksystemapistorage.blob.core.windows.net/chdelivery2021/";
-            string uriWithSas = SetSasToken(uriString);
-            Uri uri = new Uri(uriWithSas);
-            BlobContainerClient client = new BlobContainerClient(uri, new BlobClientOptions { });
-            var r = client.Exists().Value;
         }
         public static string SetSasToken(string fullUriString)
         {
@@ -40,39 +35,37 @@ namespace Common
             if (IsValidFullUri(uriString))
                 return uriString;
             return PathCombine($"{Constants.AZURE_ROOT_PATH}{uriString}", uriString);
-        }
-        public static List<string> ListDirectories(string blobString, string blobContainerName="")
-        {
-            Uri tmpUri = new Uri(blobString);
-            string prefix = tmpUri.LocalPath.Substring(blobString.Length);
+        }        
 
-            Uri uri = new Uri($"https://{tmpUri.Host}{blobString}");
-            BlobContainerClient client = new BlobContainerClient(uri);
-            
+        public static List<string> ListCurrentBlobs(string blobString)
+        {
+            return ListCurrentItems(blobString, true);
+        }
+
+        public static List<string> ListCurrentDirectories(string blobString)
+        {
+            return ListCurrentItems(blobString, false);
+        }
+
+        public static List<string> ListCurrentItems(string blobString, bool listFile)
+        {
+            Uri uri = new Uri(blobString);
+            string rootUriString = $"https://{uri.Host}{uri.Segments[0]}{uri.Segments[1]}";
+            string prefix = string.Join("", uri.Segments.Skip(2));
+            Uri rootUri = new Uri(rootUriString);
+            BlobContainerClient client = new BlobContainerClient(rootUri);
             var pages = client.GetBlobsByHierarchy(prefix: prefix, delimiter: "/").AsPages();
             List<string> list = new List<string>();
-            foreach(Page<BlobHierarchyItem> page in pages)
+            foreach (Page<BlobHierarchyItem> page in pages)
             {
-                list.AddRange(page.Values.Where(x => x.IsPrefix).Select(x => $"{uri.OriginalString}{x.Prefix}"));
+                var currentContent = listFile
+                    ? page.Values.Where(x => !x.IsPrefix).Select(x => $"{uri.OriginalString}{x.Blob.Name}")
+                    : page.Values.Where(x => x.IsPrefix).Select(x => $"{uri.OriginalString}{x.Prefix}");
+                list.AddRange(currentContent);
             }
             return list;
+
         }
-        public static List<string> ListCurrentBlobs(string blobString, string blobContainerName="")
-        {
-            Uri tmpUri = new Uri(blobString);
-            string prefix = tmpUri.LocalPath.Substring(blobString.Length);
-
-            Uri uri = new Uri($"https://{tmpUri.Host}{blobString}");
-            BlobContainerClient client = new BlobContainerClient(uri);
-            var pages = client.GetBlobs(prefix: prefix).AsPages();
-
-            List<string> list = new List<string>();
-            foreach(Page<BlobItem> page in pages)
-            {                
-                list.AddRange(page.Values.Select(x => $"{uri.OriginalString}{x.Name}"));                
-            }
-            return list;
-        }        
         public static Stream ReadBlobToStream(string uriString)
         {
             Uri uri = new Uri(uriString);
