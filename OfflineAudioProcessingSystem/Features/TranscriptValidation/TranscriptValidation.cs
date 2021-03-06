@@ -65,7 +65,7 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
             }
         }
         private void ValidateFolder(string inputRootPath, string specificPath="")
-        {
+        {            
             foreach (string filePath in Directory.EnumerateFiles(inputRootPath, "*.txt", SearchOption.AllDirectories))
             {
                 ValidateFile(filePath, specificPath);
@@ -138,7 +138,7 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
             File.WriteAllLines(MappingPath, mappingList);
         }
 
-        public void MergeTextGrid(string textGridFolder, string audioFolder, string outputFolder, string reportPath)
+        public void MergeTextGrid(string textGridFolder, string audioFolder, string outputFolder, string reportPath, bool useExistingSgHg)
         {
             List<string> reportList = new List<string>();
             foreach(string taskFolder in Directory.EnumerateDirectories(textGridFolder))
@@ -157,12 +157,10 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                         string outputWaveFilePath = Path.Combine(outputTaskFolder, fileName + ".wav");
                         string sgPath = Path.Combine(outputTaskFolder, fileName + ".txt.sg");
                         string hgPath = Path.Combine(outputTaskFolder, fileName + ".txt.hg");
-                        TextGrid.TextGridToText(tgFilePath, outputTextFilePath, sgPath,hgPath);
+                        TextGrid.TextGridToText(tgFilePath, outputTextFilePath, sgPath,hgPath, useExistingSgHg);
                         if (!TextGrid.Reject)
                         {
-                            if (File.Exists(outputWaveFilePath))
-                                File.Delete(outputWaveFilePath);
-                            File.Copy(wavePath, outputWaveFilePath);
+                            Sanity.Requires(File.Exists(wavePath));
                         }
                         else
                         {
@@ -537,6 +535,8 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                 .Replace('(', ' ')
                 .Replace(')',' ')
                 .Replace('–',' ')
+                .Replace("<<","<")
+                .Replace(">>",">")
                 ;
             
 
@@ -556,7 +556,7 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                     continue;
                 if (c >= '\u00c0' && c <= '\u017f')
                     continue;
-                if (c == ' ' || c == '-' || c == '\'')
+                if (c == ' ' || c == '-' || c == '\''||c==946)
                     continue;
                 if (c >= '0' && c <= '9')
                     throw new CommonException($"{c}", 13);

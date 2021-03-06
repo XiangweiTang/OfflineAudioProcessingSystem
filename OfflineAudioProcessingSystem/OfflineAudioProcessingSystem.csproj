@@ -91,6 +91,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Common\LineSets.cs" />
     <Compile Include="Common\TextGrid.cs" />
     <Compile Include="Config.cs" />
     <Compile Include="ConfigHelper.cs" />

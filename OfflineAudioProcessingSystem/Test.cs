@@ -20,39 +20,33 @@ namespace OfflineAudioProcessingSystem
 
         public Test(string[] args)
         {
-
-        }
-        private bool InfoMatch(TmpLine tmpLine, IdDictLine dictLine)
-        {
-            return tmpLine.Age == dictLine.Age && tmpLine.Gender == dictLine.Gender;
+            string path = @"D:\WorkFolder\Transcripts\20210226\Offline";
+            //MergeOfflineData(path, false);
+            RunTransValidation(path);
         }
 
-        private void Mapping()
+        private void AddDialect(string path)
         {
-            string namingMappingPath = @"D:\WorkFolder\Summary\20210222\OverallMapping_WithDupe_20210303.txt";
-            string dictPath = @"D:\WorkFolder\Summary\20210222\Old_WithSR.txt";
-            string o = @"D:\WorkFolder\Summary\20210222\OverallMapping_WithDupeNew_20210303.txt";
-            List<string> list = new List<string>();
-            var dict = File.ReadLines(dictPath).Select(x => new OverallMappingLine(x))
-                .ToDictionary(x => x.AudioId, x => x);
-            foreach (string s in File.ReadLines(namingMappingPath))
+            const string O_PREFIX = "<chdialects>";
+            const string O_SUFFIX = "<chdialects/>";
+            const string C_PREFIX = "<chdialects-converted>";
+            const string C_SUFFIX = "<chdialects-converted/>";
+
+            Regex OverallRegex = new Regex("^(\\[[0-9. ]+\\])(.*)$", RegexOptions.Compiled);
+            var list = File.ReadAllLines(path);
+            Sanity.Requires(list.Length % 2 == 0);
+            for (int i = 0; i < list.Length; i += 2)
             {
-                var split = s.Split('\t');
-                if (split[3] != "Valid")
-                {
-                    list.Add(s + "\t" + "\t");
-                    continue;
-                }
-                string key = split[0];
-                string path = dict[key].AudioPath;
-                string dialect = dict[key].Dialect;
-                string outputFolder = Path.Combine(@"D:\WorkFolder\300hrsRecordingNew\20210303", dialect, split[1]);
-                Directory.CreateDirectory(outputFolder);
-                string outputPath = Path.Combine(outputFolder, $"{dialect}_{split[1]}_{split[2]}.wav");
-                File.Copy(path, outputPath);
-                list.Add(s + "\t" + path + "\t" + outputPath);
+                string o = list[i];
+                string c = list[i + 1];
+                Sanity.Requires(OverallRegex.IsMatch(o) && OverallRegex.IsMatch(c));
+                var oMatch = OverallRegex.Match(o);
+                var cMatch = OverallRegex.Match(c);
+                list[i] = $"{oMatch.Groups[1].Value} S1 {O_PREFIX}{oMatch.Groups[2].Value} {O_SUFFIX}";
+                list[i + 1] = $"{cMatch.Groups[1].Value} S1 {C_PREFIX}{cMatch.Groups[2].Value} {C_SUFFIX}";
             }
-            File.WriteAllLines(o, list);
+            File.Copy(path, path + ".backup");
+            File.WriteAllLines(path, list);
         }
 
         private void GenerateTimeStamp(string folderPath)
@@ -170,14 +164,14 @@ namespace OfflineAudioProcessingSystem
 
             File.WriteAllLines(o, list);
         }
-        private void MergeOfflineData(string workFolder)
+        private void MergeOfflineData(string workFolder, bool useExistingSgHg)
         {
             string textgridFolder = Path.Combine(workFolder, "TextGrid");
             string audioFolder = Path.Combine(workFolder, "Audio");
             string mergeFolder = Path.Combine(workFolder, "Input");
             string reportPath = Path.Combine(workFolder, "TextgridMerge.txt");
             TranscriptValidation.TranscriptValidation t = new TranscriptValidation.TranscriptValidation();
-            t.MergeTextGrid(textgridFolder, audioFolder, mergeFolder, reportPath);
+            t.MergeTextGrid(textgridFolder, audioFolder, mergeFolder, reportPath, useExistingSgHg);
         }
         Dictionary<string, string> NameIdDict = new Dictionary<string, string>();
         private void RunTransValidation(string workFolder, string specificPath = "")
@@ -713,7 +707,6 @@ namespace OfflineAudioProcessingSystem
         }
     }
 
-
     class BetaFeature
     {
         public string Input { get; set; } = @"D:\Tmp\20210126_Audio\Visp";
@@ -752,8 +745,6 @@ namespace OfflineAudioProcessingSystem
         }
     }
 
-
-
     class ATransfer : FolderTransfer
     {
         protected override void ItemTransfer(string inputPath, string outputPath)
@@ -762,346 +753,13 @@ namespace OfflineAudioProcessingSystem
         }
     }
 
-    class PlatformLine : Line
+    class MapTranscript
     {
-        public PlatformLine(string lineStr) : base(lineStr)
+        public void MapOnlineFile(string workFolder)
         {
-        }
-
-        public int TaskID { get; set; }
-        public string TaskName { get; set; }
-        public string TaskStatus { get; set; }
-        public int AudioID { get; set; }
-        public string AudioName { get; set; }
-        public string AudioStatus { get; set; }
-        public string Annotator { get; set; }
-        public string Duration { get; set; }
-        public string ValidDuration { get; set; }
-        public string PassDuration { get; set; }
-        public string PassValidDuration { get; set; }
-
-        protected override IEnumerable<object> GetLine()
-        {
-            yield return TaskID;
-            yield return TaskName;
-            yield return TaskStatus;
-            yield return AudioID;
-            yield return AudioName;
-            yield return AudioStatus;
-            yield return Annotator;
-            yield return Duration;
-            yield return ValidDuration;
-            yield return PassDuration;
-            yield return PassValidDuration;
-        }
-
-        protected override void SetLine(string[] split)
-        {
-            TaskID = int.Parse(split[0].Trim());
-            TaskName = split[1].Trim();
-            TaskStatus = split[2].Trim();
-            AudioID = int.Parse(split[3].Trim());
-            AudioName = split[4].Trim();
-            AudioStatus = split[5].Trim();
-            Annotator = split[6].Trim();
-            Duration = split[7].Trim();
-            ValidDuration = split[8].Trim();
-            PassDuration = split[9].Trim();
-            PassValidDuration = split[10].Trim();
+            string annotatorPath = Path.Combine(workFolder, "FromAnnotation.txt");
+            string ovarllMappingPath = @"";
         }
     }
 
-    class AudioMappingLine : Line
-    {
-        public AudioMappingLine(string s) : base(s) { }
-        public string TaskId { get; set; }
-        public string TaskName { get; set; }
-        public string AudioId { get; set; }
-        public string WavName { get; set; }
-        public string SpeakerId { get; set; }
-        public string Gender { get; set; }
-        public string Age { get; set; }
-        protected override IEnumerable<object> GetLine()
-        {
-            yield return TaskId;
-            yield return TaskName;
-            yield return AudioId;
-            yield return WavName;
-            yield return SpeakerId;
-            yield return Gender;
-            yield return Age;
-        }
-
-        protected override void SetLine(string[] split)
-        {
-            TaskId = split[0];
-            TaskName = split[1];
-            AudioId = split[2];
-            WavName = split[3];
-            SpeakerId = split[4];
-            Gender = split[5];
-            Age = split[6];
-        }
-    }
-    class OverallMappingLine : Line
-    {
-        public string TaskId { get; set; }
-        public string TaskName { get; set; }
-        public string AudioId { get; set; }
-        public string AudioName { get; set; }
-        public string Speaker { get; set; }
-        public string Gender { get; set; }
-        public string Age { get; set; }
-        public string Dialect { get; set; }
-        public string AudioFolder { get; set; }
-        public string AudioPath { get; set; }
-        public string TeamName { get; set; }
-        public string DupeGroup { get; set; }
-        public bool ValidFlag { get; set; }
-        public string AudioTime { get; set; }
-        public string SpeechRatio { get; set; }
-
-        public OverallMappingLine() { }
-        public OverallMappingLine(string lineStr) : base(lineStr)
-        {
-        }
-
-        protected override IEnumerable<object> GetLine()
-        {
-            yield return TaskId;
-            yield return TaskName;
-            yield return AudioId;
-            yield return AudioName;
-            yield return Speaker;
-            yield return Gender;
-            yield return Age;
-            yield return Dialect;
-            yield return AudioFolder;
-            yield return AudioPath;
-            yield return TeamName;
-            yield return DupeGroup;
-            yield return ValidFlag;
-            yield return AudioTime;
-            yield return SpeechRatio;
-        }
-
-        protected override void SetLine(string[] split)
-        {
-            TaskId = split[0];
-            TaskName = split[1];
-            AudioId = split[2];
-            AudioName = split[3];
-            Speaker = split[4];
-            Gender = split[5];
-            Age = split[6];
-            Dialect = split[7];
-            AudioFolder = split[8];
-            AudioPath = split[9];
-            TeamName = split[10];
-            if (string.IsNullOrWhiteSpace(TeamName))
-                TeamName = "NotAssigned";
-            DupeGroup = split[11];
-            ValidFlag = bool.Parse(split[12]);
-            AudioTime = split[13];
-            SpeechRatio = split[14];
-        }
-    }
-
-    class ReportLine : Line
-    {
-        public string Dialect { get; set; }
-        public string SpeakerId { get; set; }
-        public string AudioId { get; set; }
-        public string AzurePath { get; set; }
-        public string RecordedBy { get; set; }
-        public string AnnotatedBy { get; set; }
-        public ReportLine(string s) : base(s) { }
-        public ReportLine() : base() { }
-        protected override IEnumerable<object> GetLine()
-        {
-            yield return Dialect;
-            yield return SpeakerId;
-            yield return AudioId;
-            yield return AzurePath;
-            yield return RecordedBy;
-            yield return AnnotatedBy;
-        }
-
-        protected override void SetLine(string[] split)
-        {
-            Dialect = split[0];
-            SpeakerId = split[1];
-            AudioId = split[2];
-            AzurePath = split[3];
-            RecordedBy = split[4];
-            AnnotatedBy = split[5];
-        }
-    }
-
-    class MetaDataLine : Line
-    {
-        public string Locale { get; set; }
-        public string SpeakerId { get; set; }
-        public string AudioId { get; set; }
-        public string RelativePath { get; set; }
-        public string RecordedBy { get; set; }
-        public string AnnotatedBy { get; set; }
-        public MetaDataLine(string s) : base(s) { }
-        public MetaDataLine() : base() { }
-        protected override IEnumerable<object> GetLine()
-        {
-            yield return Locale;
-            yield return SpeakerId;
-            yield return AudioId;
-            yield return RelativePath;
-            yield return RecordedBy;
-            yield return AnnotatedBy;
-        }
-
-        protected override void SetLine(string[] split)
-        {
-            Locale = split[0];
-            SpeakerId = split[1];
-            AudioId = split[2];
-            RelativePath = split[3];
-            RecordedBy = split[4];
-            AnnotatedBy = split[5];
-        }
-    }
-
-    class NewAddedLine : Line
-    {
-        public int AudioId { get; set; }
-        public string LocalAudioPath { get; set; }
-        public string Locale { get; set; }
-        public string InternalSpeakerId { get; set; }
-        public NewAddedLine(string s) : base(s) { }
-        public NewAddedLine() : base() { }
-
-        protected override void SetLine(string[] split)
-        {
-            AudioId = int.Parse(split[0]);
-            LocalAudioPath = split[1];
-            Locale = split[2].ToLower();
-            InternalSpeakerId = split[3].ToLower();
-        }
-
-        protected override IEnumerable<object> GetLine()
-        {
-            yield return AudioId;
-            yield return LocalAudioPath;
-            yield return Locale;
-            yield return InternalSpeakerId;
-        }
-    }
-
-    class FullMappingLine : Line
-    {
-        public int OnlineId { get; set; }
-        public string OldPath { get; set; }
-        public string Locale { get; set; }
-        public string InternalSpeakerId { get; set; }
-        public string Gender { get; set; }
-        public int Age { get; set; }
-        public int UniversalSpeakerId { get; set; }
-        public string UniversalSpeakerString => $"{UniversalSpeakerId:00000}";
-        public int UniversalAudioId { get; set; }
-        public string UniversalAudioString => $"{UniversalAudioId:00000}";
-        public string NewPath { get; set; }
-        public FullMappingLine(string s) : base(s) { }
-        public string MergedKey => $"{Locale.ToLower()}_{InternalSpeakerId}";
-        public FullMappingLine() : base() { }
-        protected override IEnumerable<object> GetLine()
-        {
-            yield return OnlineId;
-            yield return OldPath;
-            yield return Locale;
-            yield return InternalSpeakerId;
-            yield return Gender;
-            yield return Age == 0 ? "" : Age.ToString();
-            yield return UniversalSpeakerId.ToString("00000");
-            yield return UniversalAudioId.ToString("00000");
-            yield return NewPath;
-        }
-
-        protected override void SetLine(string[] split)
-        {
-            OnlineId = int.Parse(split[0]);
-            OldPath = split[1];
-            Locale = split[2].ToLower();
-            InternalSpeakerId = split[3].ToLower();
-            Gender = split[4];
-            Age = int.Parse(split[5]==""?"0":split[5]);
-            UniversalSpeakerId = int.Parse(split[6]);
-            UniversalAudioId = int.Parse(split[7]);
-            NewPath = split[8];
-        }
-
-        public void CopyFile()
-        {
-            if (!File.Exists(NewPath))
-                File.Copy(OldPath, NewPath);
-        }
-    }
-
-    class IdDictLine : Line
-    {
-        public string UniversalId { get; set; }
-        public string MergedId { get; set; }
-        public string InternalId { get; set; }
-        public string Gender { get; set; }
-        public string Age { get; set; }
-        public IdDictLine(string s) : base(s) { }
-        public IdDictLine() : base() { }
-        protected override IEnumerable<object> GetLine()
-        {
-            yield return UniversalId;
-            yield return MergedId;
-            yield return InternalId;
-            yield return Gender;
-            yield return Age;
-        }
-
-        protected override void SetLine(string[] split)
-        {
-            UniversalId = split[0];
-            MergedId = split[1];
-            InternalId = split[2];
-            Gender = split[3];
-            Age = split[4];
-        }
-    }
-
-
-    class TmpLine : Line
-    {
-        public string TmpId { get; set; }
-        public string LocalPath { get; set; }
-        public string Locale { get; set; }
-        public string Speaker { get; set; }
-        public string Gender { get; set; }
-        public string Age { get; set; }
-        public string MergeSpeakerId => $"{Locale}_{Speaker}";
-        public TmpLine(string s) : base(s) { }
-        public TmpLine() : base() { }
-        protected override IEnumerable<object> GetLine()
-        {
-            yield return TmpId;
-            yield return LocalPath;
-            yield return Locale;
-            yield return Speaker;
-            yield return Gender;
-            yield return Age;
-        }
-
-        protected override void SetLine(string[] split)
-        {
-            TmpId = split[0];
-            LocalPath = split[1].ToLower();
-            Locale = split[2].ToLower();
-            Speaker = split[3].ToLower();
-            Gender = split[4].ToLower();
-            Age = split[5];
-        }
-    }
 }

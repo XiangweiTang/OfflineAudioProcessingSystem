@@ -17,14 +17,16 @@ namespace OfflineAudioProcessingSystem
         public static void Test()
         {
         }
-        public static void TextGridToText(string textGridPath, string textPath, string sgIntermeidaPath, string hgIntermediaPath)
+        public static void TextGridToText(string textGridPath, string textPath, string sgIntermeidaPath, string hgIntermediaPath, bool usingExistingSgHg)
         {
             Reject = false;
             AllList = new List<string>();
-            var textgridTextList = File.ReadLines(textGridPath);
-            var textList = GetIntervalsNew(textgridTextList);
-            OutputIntermediaIntervals(textList, sgIntermeidaPath, hgIntermediaPath);
-
+            if (!usingExistingSgHg)
+            {
+                var textgridTextList = File.ReadLines(textGridPath);
+                var textList = GetIntervalsNew(textgridTextList);
+                OutputIntermediaIntervals(textList, sgIntermeidaPath, hgIntermediaPath);
+            }
             var outputList = MergeIntermediaIntervals(sgIntermeidaPath, hgIntermediaPath).ToArray();
             if (outputList.Length == 0)
             {
@@ -75,6 +77,8 @@ namespace OfflineAudioProcessingSystem
                 double diff1 = Math.Abs(double.Parse(sgList[i].XMin) - double.Parse(hgList[i].XMin));
                 double diff2 = Math.Abs(double.Parse(sgList[i].XMax) - double.Parse(hgList[i].XMax));
                 Sanity.Requires(diff1 <= 1 && diff2 <= 1, "Time stamp mismatch.");
+                hgList[i].XMin = sgList[i].XMin;
+                hgList[i].XMax = sgList[i].XMax;
                 yield return sgList[i].OutputSpecific();
                 yield return hgList[i].OutputSpecific();
             }
