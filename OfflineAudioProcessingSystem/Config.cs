@@ -12,9 +12,9 @@ namespace OfflineAudioProcessingSystem
     {
         public string TaskName { get; private set; } = "NA";
         public string SoxPath { get; private set; } = @"C:\Program Files (x86)\sox-14-4-2\sox.exe";
-        public string FfmpegPath { get; private set; } = @"D:\AutomationSystem\ExternalTools\ffmpeg.exe";
+        public string FfmpegPath { get; private set; } = @"f:\AutomationSystem\ExternalTools\ffmpeg.exe";
         public string PythonPath { get; private set; } = @"C:\Users\engcheck\AppData\Local\Programs\Python\Python38\python.exe";
-        public string VadScriptPath { get; private set; } = @"D:\AutomationSystem\ExternalTools\VAD\py-webrtcvad\Print.py";
+        public string VadScriptPath { get; private set; } = @"f:\AutomationSystem\ExternalTools\VAD\py-webrtcvad\Print.py";
         protected XmlNode TaskNode = null;
         private XmlNode CommonNode = null;
         public Config() { }

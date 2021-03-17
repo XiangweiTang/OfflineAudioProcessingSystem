@@ -22,6 +22,8 @@ namespace Common
         }
         public static void Test()
         {
+            string path = "https://marksystemapistorage.blob.core.windows.net/dechcollectionsachived/300hrsRecordingContent/St.%20Gallen/ID_01_Toman/";
+            var r = ListCurrentBlobs(path);
         }
         public static string SetSasToken(string fullUriString)
         {
@@ -58,6 +60,7 @@ namespace Common
             List<string> list = new List<string>();
             foreach (Page<BlobHierarchyItem> page in pages)
             {
+                var r = page.Values.ToArray();
                 var currentContent = listFile
                     ? page.Values.Where(x => !x.IsPrefix).Select(x => $"{uri.OriginalString}{x.Blob.Name}")
                     : page.Values.Where(x => x.IsPrefix).Select(x => $"{uri.OriginalString}{x.Prefix}");

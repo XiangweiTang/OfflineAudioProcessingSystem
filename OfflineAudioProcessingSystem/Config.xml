@@ -9,15 +9,15 @@
       <AzureFolder Path="300hrs data acquisition/Zurich/Zürich 30-1.2020 F/"/>
     </Input>    
     <OutputAzureRootFolder Path="https://marksystemapistorage.blob.core.windows.net/chdatacollections/300hrsRecordingContent/"/>
-    <ReportRootFolder Path="d:\tmp"/>
-    <DailyRootFolder Path="D:\WorkFolder\DailyFolder"/>
-    <AudioRootFolder Path="D:\WorkFolder\Input\300hrsRecordingContent"/>
+    <ReportRootFolder Path="f:\tmp"/>
+    <DailyRootFolder Path="f:\WorkFolder\DailyFolder"/>
+    <AudioRootFolder Path="f:\WorkFolder\Input\300hrsRecordingContent"/>
     <AudioSettings SampleRate="16000" NumChannels="1"/>
   </AudioTransfer>
   <Common>
     <Sox Path="C:\Program Files (x86)\sox-14-4-2\sox.exe"/>
-    <Ffmpeg Path="D:\AutomationSystem\ExternalTools\ffmpeg.exe"/>
+    <Ffmpeg Path="f:\AutomationSystem\ExternalTools\ffmpeg.exe"/>
     <Python Path="C:\Users\engcheck\AppData\Local\Programs\Python\Python38\python.exe"/>
-    <VadScript Path="D:\AutomationSystem\ExternalTools\VAD\py-webrtcvad\Print.py"/>
+    <VadScript Path="f:\AutomationSystem\ExternalTools\VAD\py-webrtcvad\Print.py"/>
   </Common>
 </Root>

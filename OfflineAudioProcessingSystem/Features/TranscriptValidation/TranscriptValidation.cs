@@ -17,6 +17,8 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
         public string InputRootPath { get; set; } = @"";
         public string OutputRootPath { get; set; } = @"";
         public string MappingPath { get; set; } = @"";
+        public string MissingPath { get; set; } = "";
+        public string AudioTimePath { get; set; } = "";
         const int MAX_SHOW_COUNT = 50;
         List<string> FullList = new List<string>();
         public TranscriptValidation()
@@ -25,18 +27,19 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
         public void Test()
         {
             string s = "[5 9.75]S1 <chdialects-converted> Guten Tag <comma> ist <UNKNOWN> Ihr Vater <questionmark><chdialects-converted> ";
-            var r = ExtractLine(s, 0);
+            //var r = ExtractLine(s, 0);
         }
-        public void RunValidation(string specificPath="")
+        public void RunValidation(string specificPath="",bool ignoreDialectTag=false)
         {
             Init();
-            ValidateFolder(InputRootPath, specificPath);            
+            ValidateFolder(InputRootPath, specificPath, ignoreDialectTag);            
             File.WriteAllLines(AllPath, FullList);
         }
-        public void RunUpdate(HashSet<string> set, bool create = false)
+        public void RunUpdate(Dictionary<string,AnnotationLine> set, bool create = false)
         {
             Init();
-            UpdateFolder(InputRootPath, OutputRootPath, set, create);
+            //UpdateFolder(InputRootPath, OutputRootPath, set, create);
+            UpdateFolderNew(InputRootPath, set, OutputRootPath, create);
         }
         HashSet<string> TagSet = new HashSet<string>();
         (string, string)[] ReplaceArray = new (string, string)[0];
@@ -51,7 +54,7 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
             if (File.Exists(BlackListPath))
                 File.Delete(BlackListPath);
             File.Create(ManuallyPath).Close();
-            File.Create(BlackListPath).Close();
+            File.Create(BlackListPath).Close();            
             ReplaceArray = IO.ReadEmbed("OfflineAudioProcessingSystem.Internal.Data.HighFreqErrorTagReplacement.txt", "OfflineAudioProcessingSystem")
                 .Select(x => (x.Split('\t')[0], x.Split('\t')[1]))
                 .ToArray();
@@ -64,15 +67,26 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                 OutputFile(outputRootPath, line.LocalPath, line);
             }
         }
-        private void ValidateFolder(string inputRootPath, string specificPath="")
+        private void ValidateFolder(string inputRootPath, string specificPath="", bool ignoreDialectTag=false)
         {            
             foreach (string filePath in Directory.EnumerateFiles(inputRootPath, "*.txt", SearchOption.AllDirectories))
             {
-                ValidateFile(filePath, specificPath);
-                ValidateFileAll(filePath,specificPath);
+                ValidateFile(filePath, specificPath,ignoreDialectTag);
+                ValidateFileAll(filePath,specificPath,ignoreDialectTag);
             }
         }
-
+        public void SetDialectTag(string path)
+        {
+            var list = File.ReadAllLines(path);
+            Sanity.Requires(list.Length % 2 == 0);
+            for(int i = 0; i < list.Length; i += 2)
+            {
+                list[i] = list[i].Replace("]", $"]{O_PREFIX}") + O_SUFFIX;
+                list[i + 1] = list[i + 1].Replace("]", $"]{C_PREFIX}") + C_SUFFIX;
+            }
+            string outputPath = path + ".update";
+            File.WriteAllLines(outputPath, list);
+        }
         public void UpdateFolder(string inputRootPath, string outputRootPath, HashSet<string> validKeySet, bool createOutputWave)
         {
             List<string> mappingList = new List<string>();
@@ -105,6 +119,8 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                     string alterKey = $"{taskId}\t{alterName}";
                     if (validKeySet.Contains(key) || validKeySet.Contains(alterKey)||validKeySet.Count==0)
                     {
+                        validKeySet.Remove(key);
+                        validKeySet.Remove(alterKey);
                         var list = ValidateFile(textPath);
                         if (list != null && list.Count > 0)
                         {
@@ -135,9 +151,79 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                     }                        
                 }
             }
+            File.WriteAllLines(MissingPath, validKeySet);
             File.WriteAllLines(MappingPath, mappingList);
         }
-
+        public void UpdateFolderNew(string inputRootPath, Dictionary<string, AnnotationLine> validKeySet, string outputRootPath, bool create=false)
+        {
+            List<string> mappingList = new List<string>();
+            double totalTime = 0;
+            double validTime = 0;
+            int m1 = 0;
+            int m2 = 0;
+            foreach (string taskFolderPath in Directory.EnumerateDirectories(inputRootPath))
+            {
+                string taskName = taskFolderPath.Split('\\').Last();
+                string taskId = taskName.Split('_')[0];
+                string speakerFolder = Path.Combine(taskFolderPath, "Speaker");
+                string locale = GetLocale(taskFolderPath);
+                string speakerId = taskName.Split('_').Last();
+                if (!(speakerId.Length == 5 && speakerId.All(x => x >= '0' && x <= '9')))
+                    speakerId = "";
+                string outputSpeakerPath = Path.Combine(outputRootPath, taskName,"Speaker");
+                Directory.CreateDirectory(outputSpeakerPath);
+                foreach (string textPath in Directory.EnumerateFiles(speakerFolder, "*.txt"))
+                {
+                    string audioName = textPath.Split('\\').Last().Replace(".txt", ".wav");
+                    string alterName = audioName.Replace("ü", "u_").Replace(".txt", ".wav");
+                    string key = $"{taskId}\t{audioName}";
+                    string alterKey = $"{taskId}\t{alterName}";
+                    if (audioName == "Bern+0001+female+53+Ursula.wav")
+                        ;
+                    if (validKeySet == null||validKeySet.Keys.Contains(key) || validKeySet.Keys.Contains(alterKey))
+                    {
+                        var list = ValidateFile(textPath);
+                        string audioPath = Path.Combine(speakerFolder, audioName);
+                        Wave w = new Wave();
+                        w.ShallowParse(audioPath);
+                        double t = w.AudioLength;
+                        totalTime += t;
+                        m1++;
+                        if (list != null && list.Count > 0&&list.Count==File.ReadLines(textPath).Count())
+                        {
+                            string fileName = textPath.Split('\\').Last();
+                            var outputList = list.Select(x => OutputTransLine(x));
+                            string outputTextPath = Path.Combine(outputSpeakerPath, fileName);
+                            File.WriteAllLines(outputTextPath, outputList);
+                            ValidateFileAll(outputTextPath);
+                            if (validKeySet != null)
+                            {
+                                validKeySet.Remove(key);
+                                validKeySet.Remove(alterKey);
+                            }
+                            if (create)
+                            {
+                                validTime += t;
+                                m2++;
+                                string outputAudioPath = Path.Combine(outputSpeakerPath, audioName);
+                                File.Copy(audioPath, outputAudioPath, true);
+                            }
+                        }
+                    }
+                }
+            }
+            List<string> audioTimeList = new List<string>
+            {
+                $"{validTime}\t{totalTime}",
+                $"{validTime/3600}\t{totalTime/3600}"
+            };
+            File.WriteAllLines(AllPath, FullList);
+            
+            File.WriteAllLines(MappingPath, mappingList);
+            File.WriteAllLines(AudioTimePath, audioTimeList);
+            if (validKeySet != null)
+                File.WriteAllLines(MissingPath, validKeySet.Keys);
+        }
         public void MergeTextGrid(string textGridFolder, string audioFolder, string outputFolder, string reportPath, bool useExistingSgHg)
         {
             List<string> reportList = new List<string>();
@@ -238,7 +324,7 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
         };
 
         string TimeStampString = "";
-        private void ValidateFileAll(string filePath, string specificPath="")
+        private void ValidateFileAll(string filePath, string specificPath="", bool ignoreDialectTag=false, bool addDialectTag=false)
         {
             if (filePath == specificPath)
                 ;
@@ -256,9 +342,9 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                     
                     try
                     {
-                        line = ExtractLine(s,i);
+                        line = ExtractLine(s,i,ignoreDialectTag);
                         i++;
-                        line.Content = ValidateContent(line.Content);
+                        line.Content = ValidateContent(line.Content, i, ignoreDialectTag);
                         list.Add(line);
                     }
                     catch(CommonException e)
@@ -274,7 +360,7 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                 FullList.Add(content);
             }
         }
-        private List<TransLine> ValidateFile(string filePath, string specificPath="")
+        private List<TransLine> ValidateFile(string filePath, string specificPath = "", bool ignoreDialectTag = false, bool addDialectTag = false)
         {
             if (filePath == specificPath)
                 ;
@@ -288,9 +374,9 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                 {
                     try
                     {
-                        var line = ExtractLine(s,i);
+                        var line = ExtractLine(s,i,ignoreDialectTag);
                         i++;
-                        line.Content = ValidateContent(line.Content);
+                        line.Content = ValidateContent(line.Content,i, ignoreDialectTag);
                         list.Add(line);
                     }
                     catch (CommonException e)
@@ -301,7 +387,7 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                             case 14:    //Non-number chars.
                                 string content = $"{TransErrorArray[e.HResult]}\t{e.Message}\t{filePath}";
                                 Logger.WriteLine(content, false, true);                                
-                                break;
+                               break;
                             default:
                                 throw e;
                         }
@@ -367,13 +453,14 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
         Regex SpaceReg = new Regex("\\s+", RegexOptions.Compiled);
         Regex ExtraSpaceReg = new Regex(">\\s+<", RegexOptions.Compiled);
 
-        private TransLine ExtractLine(string s, int n)
+        private TransLine ExtractLine(string s, int n, bool ignoreDialectTag=false)
         {
             s = SpaceReg.Replace(s, " ").Trim();
             TransLine line = new TransLine();
             line = SetTimeStamp(s, line);
             line = SetSpeakerId(line.Content, line);
-            line = SetDialectFix(line.Content, line, n);
+            if (!ignoreDialectTag)
+                line = SetDialectFix(line.Content, line, n, ignoreDialectTag);
             return line;
         }
 
@@ -425,7 +512,7 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
         const string O_SUFFIX = "<chdialects/>";
         const string C_PREFIX = "<chdialects-converted>";
         const string C_SUFFIX = "<chdialects-converted/>";
-        private TransLine SetDialectFix(string s, TransLine line, int n)
+        private TransLine SetDialectFix(string s, TransLine line, int n,bool ignoreDialect)
         {
             s = s.Trim();            
             if (s.Trim().ToLower() == "<unknown/>")
@@ -438,7 +525,7 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
             if (s.StartsWith(O_PREFIX))
             {
                 if (!s.EndsWith(O_SUFFIX))
-                    return SetDialectFix($"{s}{O_SUFFIX}", line,n);
+                    return SetDialectFix($"{s}{O_SUFFIX}", line,n, ignoreDialect);
                 string middle = s.Replace(O_PREFIX, "").Trim();
                 line.Prefix = O_PREFIX;
                 line.Content = middle;
@@ -448,7 +535,7 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
             if (s.StartsWith(C_PREFIX))
             {
                 if (!s.EndsWith(C_SUFFIX))
-                    return SetDialectFix($"{s}{C_SUFFIX}", line,n);
+                    return SetDialectFix($"{s}{C_SUFFIX}", line,n, ignoreDialect);
                 string middle = s.Replace(C_PREFIX, "").Trim();
                 line.Prefix = C_PREFIX;
                 line.Content = middle;
@@ -508,13 +595,17 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
 
         Regex TagReg = new Regex("<[^<]*?>", RegexOptions.Compiled);
                         
-        private string ValidateContent(string content)
+        private string ValidateContent(string content, int n, bool ignoreDialectTag=false)
         {
             string subContent = content.Substring(0, Math.Min(content.Length, MAX_SHOW_COUNT));
+            content = content
+                .Replace("S1", " ")
+                .Replace("S2", " ");
             Sanity.Requires(!content.ToLower().Contains("s1") && !content.ToLower().Contains("s2"), subContent, 10);
             if (content.ToLower().Contains("chdialects"))
                 ;
-            Sanity.Requires(!content.ToLower().Contains("chdialects"), subContent, 11);
+            if (!ignoreDialectTag)
+                Sanity.Requires(!content.ToLower().Contains("chdialects"), subContent, 11);
             foreach (var replace in ReplaceArray)
                 content = content.Replace(replace.Item1, replace.Item2);
             content = content.Replace("?", "<questionmark>")
@@ -524,7 +615,6 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                 .Replace(",", "<comma>")
                 .Replace(";", "<comma>")
                 .Replace(".", "<fullstop>")
-                .Replace("!", "<fullstop>")
                 .Replace("´", "'")
                 .Replace("，", "<comma>")
                 .Replace("。", "<fullstop>")
@@ -537,7 +627,14 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                 .Replace('–',' ')
                 .Replace("<<","<")
                 .Replace(">>",">")
+                .Replace("<comma/>","<comma>")
+                .Replace("<question_mark/>","<questionmark>")
+                .Replace("<fullstop/>","<fullstop>")
+                .Replace("<fill/>", "<FILL/>")
+                .Replace("<exclamation_mark/>", "<fullstop>")
                 ;
+            if (!content.Contains("!\\"))
+                content = content.Replace("!", "<fullstop>");
             
 
             var localTags = GetTags(content).ToArray();
@@ -545,7 +642,8 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
             Sanity.Requires(diff.Count() == 0, subContent, 12);
             TagSet.UnionWith(localTags);
             string rawContent = TagReg.Replace(content, " ")
-                .Replace("-\\BINDESTRICH","")
+                .Replace("-\\BINDESTRICH", "")
+                //.Replace("!\\AUSRUFEZEICHEN", "")
                 ;
             Sanity.Requires(!rawContent.Contains('<') && !rawContent.Contains('>'), subContent, 12);
             foreach(char c in rawContent)

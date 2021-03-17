@@ -12,13 +12,13 @@ namespace OfflineAudioProcessingSystem.AudioTransfer
     {
         public string[] InputAzureFolderPathArray { get; private set; }
         public string InputAzureBlobContainerName { get; private set; }
-        public string OutputAzureRootFolderPath { get; private set; } = @"D:\Tmp\Basel 18.11. 2020 S_Update";
-        public string ExistringFileListPath { get; private set; } = @"D:\WorkFolder\Input\Summary.txt";
+        public string OutputAzureRootFolderPath { get; private set; } = @"f:\Tmp\Basel 18.11. 2020 S_Update";
+        public string ExistringFileListPath { get; private set; } = @"f:\WorkFolder\Input\Summary.txt";
         public int SampleRate { get; private set; } = 16000;
         public int NumChannels { get; private set; } = 1;
-        public string ReportRootFolderPath { get; private set; } = @"D:\Tmp";
+        public string ReportRootFolderPath { get; private set; } = @"f:\Tmp";
         public string DailyRootFolderPath { get; private set; } = @"";
-        public string AudioRootFolder { get; private set; } = @"D:\WorkFolder\Input\300hrsRecordingContent";        
+        public string AudioRootFolder { get; private set; } = @"f:\WorkFolder\Input\300hrsRecordingContent";        
         protected override void LoadTaskNode()
         {
             string timeStamp = DateTime.Now.ToStringPathLong();

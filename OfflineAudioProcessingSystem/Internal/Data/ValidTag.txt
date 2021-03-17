@@ -7,3 +7,7 @@
 <questionmark>
 <comma>
 <fullstop>
+<chdialects>
+<chdialects/>
+<chdialects-converted>
+<chdialects-converted/>

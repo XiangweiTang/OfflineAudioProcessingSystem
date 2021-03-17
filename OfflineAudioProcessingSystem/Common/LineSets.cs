@@ -10,55 +10,6 @@ namespace OfflineAudioProcessingSystem
     class LineSets
     {
     }
-    class PlatformLine : Line
-    {
-        public PlatformLine(string lineStr) : base(lineStr)
-        {
-        }
-
-        public int TaskID { get; set; }
-        public string TaskName { get; set; }
-        public string TaskStatus { get; set; }
-        public int AudioID { get; set; }
-        public string AudioName { get; set; }
-        public string AudioStatus { get; set; }
-        public string Annotator { get; set; }
-        public string Duration { get; set; }
-        public string ValidDuration { get; set; }
-        public string PassDuration { get; set; }
-        public string PassValidDuration { get; set; }
-
-        protected override IEnumerable<object> GetLine()
-        {
-            yield return TaskID;
-            yield return TaskName;
-            yield return TaskStatus;
-            yield return AudioID;
-            yield return AudioName;
-            yield return AudioStatus;
-            yield return Annotator;
-            yield return Duration;
-            yield return ValidDuration;
-            yield return PassDuration;
-            yield return PassValidDuration;
-        }
-
-        protected override void SetLine(string[] split)
-        {
-            TaskID = int.Parse(split[0].Trim());
-            TaskName = split[1].Trim();
-            TaskStatus = split[2].Trim();
-            AudioID = int.Parse(split[3].Trim());
-            AudioName = split[4].Trim();
-            AudioStatus = split[5].Trim();
-            Annotator = split[6].Trim();
-            Duration = split[7].Trim();
-            ValidDuration = split[8].Trim();
-            PassDuration = split[9].Trim();
-            PassValidDuration = split[10].Trim();
-        }
-    }
-
     class AudioMappingLine : Line
     {
         public AudioMappingLine(string s) : base(s) { }
@@ -108,7 +59,7 @@ namespace OfflineAudioProcessingSystem
         public bool ValidFlag { get; set; }
         public string AudioTime { get; set; }
         public string SpeechRatio { get; set; }
-
+        public string MergedId => $"{Dialect}_{Speaker}";
         public OverallMappingLine() { }
         public OverallMappingLine(string lineStr) : base(lineStr)
         {
@@ -122,7 +73,7 @@ namespace OfflineAudioProcessingSystem
             yield return AudioName;
             yield return Speaker;
             yield return Gender;
-            yield return Age;
+            yield return Age == "0" ? "" : Age.ToString();
             yield return Dialect;
             yield return AudioFolder;
             yield return AudioPath;
@@ -139,17 +90,17 @@ namespace OfflineAudioProcessingSystem
             TaskName = split[1];
             AudioId = split[2];
             AudioName = split[3];
-            Speaker = split[4];
+            Speaker = split[4].ToLower();
             Gender = split[5];
             Age = split[6];
-            Dialect = split[7];
+            Dialect = split[7].ToLower();
             AudioFolder = split[8];
             AudioPath = split[9];
             TeamName = split[10];
             if (string.IsNullOrWhiteSpace(TeamName))
                 TeamName = "NotAssigned";
             DupeGroup = split[11];
-            ValidFlag = bool.Parse(split[12]);
+            ValidFlag = split[12] != "" ? bool.Parse(split[12]) : true;
             AudioTime = split[13];
             SpeechRatio = split[14];
         }
@@ -245,7 +196,7 @@ namespace OfflineAudioProcessingSystem
 
     class FullMappingLine : Line
     {
-        public int OnlineId { get; set; }
+        public int AudioPlatformId { get; set; }
         public string OldPath { get; set; }
         public string Locale { get; set; }
         public string InternalSpeakerId { get; set; }
@@ -261,7 +212,7 @@ namespace OfflineAudioProcessingSystem
         public FullMappingLine() : base() { }
         protected override IEnumerable<object> GetLine()
         {
-            yield return OnlineId;
+            yield return AudioPlatformId;
             yield return OldPath;
             yield return Locale;
             yield return InternalSpeakerId;
@@ -274,7 +225,7 @@ namespace OfflineAudioProcessingSystem
 
         protected override void SetLine(string[] split)
         {
-            OnlineId = int.Parse(split[0]);
+            AudioPlatformId = int.Parse(split[0]);
             OldPath = split[1];
             Locale = split[2].ToLower();
             InternalSpeakerId = split[3].ToLower();
@@ -352,7 +303,7 @@ namespace OfflineAudioProcessingSystem
         public int TaskId { get; set; } 
         public string TaskName { get; set; }
         public string TaskStatus { get; set; }
-        public int AudioId { get; set; }
+        public int AudioPlatformId { get; set; }
         public string AudioName { get; set; }
         public AnnotationLine(string s) : base(s) { }
         public AnnotationLine() : base() { }
@@ -361,7 +312,7 @@ namespace OfflineAudioProcessingSystem
             yield return TaskId;
             yield return TaskName;
             yield return TaskStatus;
-            yield return AudioId;
+            yield return AudioPlatformId;
             yield return AudioName;
 
         }
@@ -371,7 +322,7 @@ namespace OfflineAudioProcessingSystem
             TaskId = int.Parse(split[0]);
             TaskName = split[1];
             TaskStatus = split[2];
-            AudioId = int.Parse(split[3]);
+            AudioPlatformId = int.Parse(split[3]);
             AudioName = split[4];
         }
     }
