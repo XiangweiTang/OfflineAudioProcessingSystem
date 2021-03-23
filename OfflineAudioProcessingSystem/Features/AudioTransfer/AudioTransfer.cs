@@ -217,6 +217,7 @@ namespace OfflineAudioProcessingSystem.AudioTransfer
                         if (File.Exists(outputTimeStampPath))
                             File.Delete(outputTimeStampPath);
                         LocalCommon.SetTimeStampsWithVad(outputPath, outputTimeStampPath);
+                        CheckTimeStamp(outputTimeStampPath);
                         Sanity.Requires(File.Exists(outputTimeStampPath));
                         string outputTextGridPath = outputPath.Replace(".wav", ".textgrid");
                         if (File.Exists(outputTextGridPath))
@@ -243,6 +244,22 @@ namespace OfflineAudioProcessingSystem.AudioTransfer
                 if (File.Exists(outputPath))
                     File.Delete(outputPath);
             }
+        }
+
+        private void CheckTimeStamp(string timeStampPath)
+        {
+            var list = File.ReadAllLines(timeStampPath);
+            List<string> o = new List<string>();
+            for(int i = 0; i < list.Length; i++)
+            {
+                double d1 = double.Parse(list[i].Split('\t')[0]);
+                double d2 = double.Parse(list[i].Split('\t')[1]);
+                if (d1 < d2)
+                    o.Add(list[i]);
+                else
+                    ;
+            }
+            File.WriteAllLines(timeStampPath, o);
         }
 
         public void ConvertToWave(string inputPath, string interMediaPath, string outputPath)

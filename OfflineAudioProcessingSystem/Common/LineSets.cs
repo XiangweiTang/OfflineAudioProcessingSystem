@@ -141,7 +141,7 @@ namespace OfflineAudioProcessingSystem
     {
         public string Locale { get; set; }
         public string SpeakerId { get; set; }
-        public string AudioId { get; set; }
+        public string FileId { get; set; }
         public string RelativePath { get; set; }
         public string RecordedBy { get; set; }
         public string AnnotatedBy { get; set; }
@@ -151,7 +151,7 @@ namespace OfflineAudioProcessingSystem
         {
             yield return Locale;
             yield return SpeakerId;
-            yield return AudioId;
+            yield return FileId;
             yield return RelativePath;
             yield return RecordedBy;
             yield return AnnotatedBy;
@@ -161,7 +161,7 @@ namespace OfflineAudioProcessingSystem
         {
             Locale = split[0];
             SpeakerId = split[1];
-            AudioId = split[2];
+            FileId = split[2];
             RelativePath = split[3];
             RecordedBy = split[4];
             AnnotatedBy = split[5];

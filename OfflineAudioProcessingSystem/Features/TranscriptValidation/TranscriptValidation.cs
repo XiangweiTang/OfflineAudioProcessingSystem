@@ -178,8 +178,6 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                     string alterName = audioName.Replace("ü", "u_").Replace(".txt", ".wav");
                     string key = $"{taskId}\t{audioName}";
                     string alterKey = $"{taskId}\t{alterName}";
-                    if (audioName == "Bern+0001+female+53+Ursula.wav")
-                        ;
                     if (validKeySet == null||validKeySet.Keys.Contains(key) || validKeySet.Keys.Contains(alterKey))
                     {
                         var list = ValidateFile(textPath);
@@ -244,9 +242,11 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                         string sgPath = Path.Combine(outputTaskFolder, fileName + ".txt.sg");
                         string hgPath = Path.Combine(outputTaskFolder, fileName + ".txt.hg");
                         TextGrid.TextGridToText(tgFilePath, outputTextFilePath, sgPath,hgPath, useExistingSgHg);
+                        string outputWavePath = Path.Combine(outputTaskFolder, fileName + ".wav");
                         if (!TextGrid.Reject)
                         {
                             Sanity.Requires(File.Exists(wavePath));
+                            File.Copy(wavePath, outputWavePath);
                         }
                         else
                         {
@@ -255,6 +255,7 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                     }catch(CommonException ce)
                     {
                         Console.WriteLine(tgFilePath + "\t" + ce.Message);
+                        reportList.Add(tgFilePath + "\t" + ce.Message);
                     }
                 }
             }
@@ -321,6 +322,7 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
             "Digit.",            //  13
             "Non-digit char.",         //  14
             "No speaker ID",    //  15
+            "Empty content",    //  16
         };
 
         string TimeStampString = "";
@@ -412,6 +414,7 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                     case 11:    //Content with dialect tag   
                     case 13:    //Invalid char
                     case 15:    //No speaker ID
+                    case 16:    //Empty content
                         Logger.ErrorPath = BlackListPath;
                         Logger.WriteLine($"{TransErrorArray[e.HResult]}\t{e.Message}\t{filePath}",false,true);
                         Logger.ErrorPath = ManuallyPath;
@@ -461,6 +464,7 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
             line = SetSpeakerId(line.Content, line);
             if (!ignoreDialectTag)
                 line = SetDialectFix(line.Content, line, n, ignoreDialectTag);
+            Sanity.Requires(!string.IsNullOrWhiteSpace(line.Content), line.StartTime.ToString(), 16);
             return line;
         }
 
@@ -631,6 +635,8 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                 .Replace("<question_mark/>","<questionmark>")
                 .Replace("<fullstop/>","<fullstop>")
                 .Replace("<fill/>", "<FILL/>")
+                .Replace("<cnoise>","<CNOISE/>")
+                .Replace("<CNOISE>", "<CNOISE/>")
                 .Replace("<exclamation_mark/>", "<fullstop>")
                 ;
             if (!content.Contains("!\\"))
@@ -643,7 +649,7 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
             TagSet.UnionWith(localTags);
             string rawContent = TagReg.Replace(content, " ")
                 .Replace("-\\BINDESTRICH", "")
-                //.Replace("!\\AUSRUFEZEICHEN", "")
+                .Replace("!\\AUSRUFEZEICHEN", "")
                 ;
             Sanity.Requires(!rawContent.Contains('<') && !rawContent.Contains('>'), subContent, 12);
             foreach(char c in rawContent)
@@ -662,6 +668,7 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
             }
             CharSet.UnionWith(rawContent);
             content = CleanupSpace(content);
+            Sanity.Requires(!string.IsNullOrWhiteSpace(content), subContent, 16);
             return content;
         }
         

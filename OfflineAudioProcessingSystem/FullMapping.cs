@@ -12,13 +12,37 @@ namespace OfflineAudioProcessingSystem
     class FullMapping
     {
         public FullMapping() { }
-        public void Run()
-        {
-            CreateMetaDataWave();
-        }
         Regex NumberReg = new Regex("^[0-9_]+$", RegexOptions.Compiled);
-        public void OutputRecordingStatus(string inputPath)
+        public void OutputRecordingStatusByGenderLocale()
         {
+            var list = File.ReadLines(Constants.OVERALL_MAPPING_PATH)
+                .Select(x => new OverallMappingLine(x));
+            var dict = File.ReadLines(Constants.SPEAKER_DICT_PATH)
+                .Select(x => new IdDictLine(x))
+                .ToDictionary(x => x.MergedId, x => x);
+            HashSet<string> existingPathSet = new HashSet<string>();
+            Dictionary<string, double> statusDict = new Dictionary<string, double>();
+            foreach(var line in list)
+            {
+                string audioPath = line.AudioPath.ToLower();
+                if (existingPathSet.Contains(audioPath))
+                    continue;
+                existingPathSet.Add(audioPath);
+                string key;
+                if (!dict.ContainsKey(line.MergedId))
+                    key = $"{line.Dialect}_{line.Gender}";
+                else
+                    key = $"{line.Dialect}_{dict[line.MergedId].Gender}";
+                if (!statusDict.ContainsKey(key))
+                    statusDict[key] = 0;
+                statusDict[key] += double.Parse(line.AudioTime);
+            }
+            var outputList = statusDict.OrderBy(x => x.Key).Select(x => $"{x.Key}\t{x.Value}");
+            File.WriteAllLines(GetCurrentTmpFile(), outputList);
+        }
+        public void OutputRecordingStatusByTeam()
+        {
+            string inputPath = @"F:\WorkFolder\Input\300hrsRecordingContent";
             Dictionary<string, double> dict = new Dictionary<string, double>();
             foreach (string dailyPath in Directory.EnumerateDirectories(inputPath))
             {
@@ -57,12 +81,15 @@ namespace OfflineAudioProcessingSystem
                 }
             }
             double d = 0;
+            List<string> outputList = new List<string>();
             foreach (var item in dict.OrderBy(x => x.Key))
             {
-                Console.WriteLine($"{item.Key}\t{item.Value}\t{item.Value / 3600}");
+                outputList.Add($"{item.Key}\t{item.Value}\t{item.Value / 3600}");
+                //Console.WriteLine($"{item.Key}\t{item.Value}\t{item.Value / 3600}");
                 d += item.Value;
             }
-            Console.WriteLine($"All\t{d}\t{d / 3600}");
+            outputList.Add($"All\t{d}\t{d / 3600}");
+            File.WriteAllLines(GetCurrentTmpFile(), outputList);
         }
         private double GetFolderHours(string path)
         {
@@ -111,13 +138,15 @@ namespace OfflineAudioProcessingSystem
             return File.ReadLines(path)
                 .Select(x => new AnnotationLine(x));
         }
-        public void CreateMetaDataWave()
+
+        public void CreateMetaData()
         {
-            CreateMetaData(@"f:\WorkFolder\300hrsRecordingNew", "*.wav", @"f:\WorkFolder\300hrsRecordingNew\Recording.metadata.txt");
-        }
-        public void CreateMetaDataText()
-        {
-            CreateMetaData(@"f:\WorkFolder\300hrsAnnotationNew", "*.txt", @"f:\WorkFolder\300hrsAnnotationNew\Annotation.metadata.txt");
+            string wavMetaDataPath = @"f:\WorkFolder\300hrsRecordingNew\Recording.metadata.txt";
+            string textMetaDataPath = @"f:\WorkFolder\300hrsAnnotationNew\Annotation.metadata.txt";
+            string mergedPath = @"f:\WorkFolder\Merged.metadata.txt";
+            CreateMetaData(@"f:\WorkFolder\300hrsRecordingNew", "*.wav", wavMetaDataPath);
+            CreateMetaData(@"f:\WorkFolder\300hrsAnnotationNew", "*.txt", textMetaDataPath);
+            MergeMetaData(wavMetaDataPath, textMetaDataPath, mergedPath);
         }
         private void CreateMetaData(string folderPath,string pattern, string outputPath)
         {
@@ -136,7 +165,7 @@ namespace OfflineAudioProcessingSystem
                         {
                             SpeakerId = speaker,
                             Locale = locale,
-                            AudioId = fileName.Split('.')[0],
+                            FileId = fileName.Split('.')[0],
                             AnnotatedBy = "Team2",
                             RelativePath = $"{locale}/{speaker}/{fileName}",
                             RecordedBy = recordedBy
@@ -147,14 +176,46 @@ namespace OfflineAudioProcessingSystem
             }
             File.WriteAllLines(outputPath, list);
         }
+        private void MergeMetaData(string wavMetaDataPath, string textMetaDataPath, string outputPath)
+        {
+            Dictionary<string, MetaDataLine> metaDict = File.ReadLines(textMetaDataPath)
+                .Select(x => new MetaDataLine(x))
+                .ToDictionary(x => GetMetaDataKey(x), x => x);
+            var list = File.ReadLines(wavMetaDataPath)
+                .Select(x => new MetaDataLine(x));
+            List<string> outputList = new List<string>();
+            foreach(var line in list)
+            {
+                string key = GetMetaDataKey(line);
+                string value = metaDict.ContainsKey(key) ? metaDict[key].RelativePath : "";
+                string s = string.Join("\t",
+                    line.Locale,
+                    line.SpeakerId,
+                    line.FileId,
+                    line.RelativePath,
+                    value,
+                    line.RecordedBy,
+                    line.AnnotatedBy
+                    );
+                outputList.Add(s);
+            }
+            File.WriteAllLines(outputPath, outputList);
+        }
+
+        private string GetMetaDataKey(MetaDataLine line)
+        {
+            return $"{line.Locale}\t{line.SpeakerId}\t{line.FileId}";
+        }
         public void CreateSpeakerInfoFile()
         {
             string inputPath = @"f:\WorkFolder\Summary\20210222\Important\Iddict.txt";
             string outputPath = @"f:\WorkFolder\Summary\20210222\Important\SpeakerInfo.txt";
+            string uploadPath = @"F:\WorkFolder\SpeakerInfo.txt";
             var list = File.ReadLines(inputPath)
                 .Select(x => new IdDictLine(x))
                 .Select(x => $"{x.UniversalId}\t{x.MergedId.Split('_')[0]}\t{x.Gender}\t{x.Age}");
             File.WriteAllLines(outputPath, list);
+            File.Copy(outputPath, uploadPath, true);
         }
         public void CalculateDeliverAudioInfo()
         {
@@ -203,11 +264,17 @@ namespace OfflineAudioProcessingSystem
             File.WriteAllLines(@"F:\WorkFolder\300hrsAnnotationNew\Report.txt", outputList);
         }
 
-        #region Output online data
+        #region Output data mapping
+        public void MappingOutputDataAll()
+        {
+            string rootPath = @"F:\WorkFolder\Transcripts";
+            MappingOnlineDataAll(rootPath);
+            MappingOfflineDataAll(rootPath);
+        }
         public void MappingOnlineDataAll(string rootPath)
         {
             List<string> list = new List<string>();
-            foreach(string onlineFolder in Directory.EnumerateDirectories(rootPath, " * online"))
+            foreach(string onlineFolder in Directory.EnumerateDirectories(rootPath, "*online"))
             {
                 list.AddRange(File.ReadLines(Path.Combine(onlineFolder, "OutputMapping.txt")));
             }
@@ -252,12 +319,10 @@ namespace OfflineAudioProcessingSystem
             }
             File.WriteAllLines(outputPath, outputList);
         }
-        #endregion
-
-        private Dictionary<string,string> RawMapping(string folderPath)
+        private Dictionary<string, string> RawMapping(string folderPath)
         {
             Dictionary<string, string> dict = new Dictionary<string, string>();
-            foreach(string audioPath in Directory.EnumerateFiles(folderPath, "*.wav"))
+            foreach (string audioPath in Directory.EnumerateFiles(folderPath, "*.wav"))
             {
                 string key = GetRawKey(audioPath.Split('\\').Last().ToLower());
                 if (dict.ContainsKey(key))
@@ -271,7 +336,7 @@ namespace OfflineAudioProcessingSystem
         private string GetRawKey(string s)
         {
             StringBuilder sb = new StringBuilder();
-            foreach(char c in s.ToLower())
+            foreach (char c in s.ToLower())
             {
                 if ('0' <= c && c <= '9')
                 {
@@ -289,7 +354,7 @@ namespace OfflineAudioProcessingSystem
         public void MappingOfflineDataAll(string rootPath)
         {
             List<string> list = new List<string>();
-            foreach(string offlineFolder in Directory.EnumerateDirectories(rootPath, "*offline"))
+            foreach (string offlineFolder in Directory.EnumerateDirectories(rootPath, "*offline"))
             {
                 list.AddRange(File.ReadLines(Path.Combine(offlineFolder, "OutputMapping.txt")));
             }
@@ -311,12 +376,12 @@ namespace OfflineAudioProcessingSystem
                 .ToDictionary(x => x.Split('\t')[0], x => x.Split('\t')[1]);
             List<string> outputList = new List<string>();
             string outputFolderPath = Path.Combine(workFolder, "Output");
-            foreach(string taskFolder in Directory.EnumerateDirectories(outputFolderPath))
+            foreach (string taskFolder in Directory.EnumerateDirectories(outputFolderPath))
             {
                 string realFolder = folderMappingDict[taskFolder];
                 var realDict = RawMapping(realFolder);
                 string speakerFolder = Path.Combine(taskFolder, "Speaker");
-                foreach(string audioPath in Directory.EnumerateFiles(speakerFolder,"*.wav"))
+                foreach (string audioPath in Directory.EnumerateFiles(speakerFolder, "*.wav"))
                 {
                     string audioName = audioPath.Split('\\').Last();
                     string key = GetRawKey(audioName);
@@ -340,13 +405,105 @@ namespace OfflineAudioProcessingSystem
             }
             File.WriteAllLines(outputPath, outputList);
         }
+        #endregion
 
-        public void MappingTextFilesToDeliver()
+        
+        public void MergeNewRecordingData()
+        {
+            string oldFilesMappingPath = @"F:\WorkFolder\Summary\20210222\Important\OverallMappingAll.txt";
+            string oldNewMappingPath = @"F:\WorkFolder\Summary\20210222\Important\FullMapping.txt";
+            // Full mapping lines, old file paths only.
+            var oldList = File.ReadLines(oldFilesMappingPath)
+                .Select(x => new OverallMappingLine(x)).ToArray();
+            // The mapping between old path to new path.
+            var oldNewMappingList = File.ReadLines(oldNewMappingPath)
+                .Select(x => new FullMappingLine(x)).ToArray();
+            HashSet<string> existingFileSet = oldNewMappingList.Select(x => x.OldPath).ToHashSet();
+
+            List<string> outputList = new List<string>();
+            string outputPath = @"F:\WorkFolder\Summary\20210222\Important\FullMapping_New.txt";
+            string idDictPath = @"F:\WorkFolder\Summary\20210222\Important\Iddict.txt";
+            string archiveRootPath = @"F:\WorkFolder\300hrsRecordingNew";
+            // The dictionary, key is the merged id, value is the dict line.
+            var dictMerged = File.ReadLines(idDictPath)
+                .Select(x => new IdDictLine(x))
+                .ToDictionary(x => x.MergedId, x => x);
+            // To verify the universal id is unique.
+            var dictValidate = File.ReadLines(idDictPath)
+                .Select(x => new IdDictLine(x))
+                .ToDictionary(x => x.UniversalId, x => x);
+            // Existing id set.
+            var existingIdSet = oldNewMappingList.Select(x => x.MergedKey).ToHashSet();
+            // Existing id dictionary, value is the current count.
+            Dictionary<string, int> existingCountDict = new Dictionary<string, int>();
+            foreach (var line in oldNewMappingList)
+            {
+                // Get the max id of the existing file.
+                if (!existingCountDict.ContainsKey(line.MergedKey))
+                    existingCountDict.Add(line.MergedKey, line.UniversalAudioId);
+                else if (existingCountDict[line.MergedKey] < line.UniversalAudioId)
+                    existingCountDict[line.MergedKey] = line.UniversalAudioId;
+            }
+            double d = 0;
+
+            // Merge data. 
+            foreach (var line in oldList)
+            {
+                // If the file exists already, or no speaker id here, then skip.
+                if (existingFileSet.Contains(line.AudioPath.ToLower()))
+                    continue;
+                if (line.Speaker == "")
+                    continue;
+                // For now skip the data with same speaker id(mergedkey).
+                if (existingIdSet.Contains(line.MergedId))
+                {
+                    Console.WriteLine(line.AudioPath);
+                    continue;
+                }
+                d += double.Parse(line.AudioTime);
+                string mergedKey = line.MergedId;
+                int uSpeakerId = int.Parse(dictMerged[mergedKey].UniversalId);
+                if (!existingCountDict.ContainsKey(mergedKey))
+                    existingCountDict.Add(mergedKey, 0);
+                else existingCountDict[mergedKey]++;
+                int uAudioId = existingCountDict[mergedKey];
+                FullMappingLine mLine = new FullMappingLine
+                {
+                    Age = line.Age == "" ? 0 : int.Parse(line.Age),
+                    AudioPlatformId = line.AudioId == "" ? 0 : int.Parse(line.AudioId),
+                    Gender = line.Gender,
+                    InternalSpeakerId = line.Speaker,
+                    Locale = line.Dialect,
+                    OldPath = line.AudioPath.ToLower(),
+                    UniversalSpeakerId = uSpeakerId,
+                    UniversalAudioId = uAudioId,
+                    NewPath = Path.Combine(archiveRootPath, line.Dialect, uSpeakerId.ToString("00000"), $"{uAudioId:00000}.wav").ToLower()
+                };
+                if(File.Exists(mLine.NewPath))
+                    Console.WriteLine($"Conflict!\t{mLine.OldPath}");
+                outputList.Add(mLine.Output());
+            }
+            Console.WriteLine(d / 3600);
+            File.WriteAllLines(outputPath, outputList);
+        }
+        public void CopyNewRecordingData()
+        {
+            string newPath = @"F:\WorkFolder\Summary\20210222\Important\FullMapping_New.txt";
+            foreach(var line in File.ReadLines(newPath).Select(x=>new FullMappingLine(x)))
+            {
+                string folderPath = GetFolder(line.NewPath).Folder.ToLower();
+                Directory.CreateDirectory(folderPath);
+                File.Copy(line.OldPath, line.NewPath);
+            }
+        }
+        public void MergeNewAnnontationData()
         {
             string offLinePath = @"F:\WorkFolder\Transcripts\OfflineMapping.txt";
             string onlinePath = @"F:\WorkFolder\Transcripts\OnlineMapping.txt";
             string overallMappingPath = @"F:\WorkFolder\Summary\20210222\Important\FullMapping.txt";
-            string outputPath = @"F:\WorkFolder\Summary\20210222\Important\TransMapping.txt";
+            string oldMappingPath= @"F:\WorkFolder\Summary\20210222\Important\TransMapping.txt";
+            string outputPath = @"F:\WorkFolder\Summary\20210222\Important\TransMapping_New.txt";
+            var existingList = File.ReadLines(oldMappingPath).Select(x=>x.ToLower()).ToHashSet();
             var dict = File.ReadLines(overallMappingPath)
                 .Select(x => new FullMappingLine(x))
                 .Select(x => new { x.OldPath, x.NewPath })
@@ -357,7 +514,7 @@ namespace OfflineAudioProcessingSystem
             List<string> outputList = new List<string>();
             foreach(string s in list)
             {
-                string textPath = s.Split('\t')[1];
+                string textPath = s.Split('\t')[1].ToLower();
                 string audioPath = s.Split('\t')[2].ToLower();
                 Sanity.Requires(File.Exists(textPath));
                 Sanity.Requires(File.Exists(audioPath));
@@ -365,6 +522,9 @@ namespace OfflineAudioProcessingSystem
                     continue;
                 string newAudioPath = dict[audioPath];
                 string newTextPath = newAudioPath.ToLower().Replace("300hrsrecordingnew", "300hrsannotationnew").Replace(".wav", ".txt");
+                string newS = $"{textPath}\t{audioPath}\t{newTextPath}\t{newAudioPath}";
+                if (existingList.Contains(newS))
+                    continue;
                 string textFolder = GetFolder(newTextPath).Folder;
                 Directory.CreateDirectory(textFolder);
                 if (File.Exists(newTextPath))
@@ -373,8 +533,8 @@ namespace OfflineAudioProcessingSystem
                     Console.WriteLine(newAudioPath);
                 else
                 {
-                    File.Copy(textPath, newTextPath);
-                    outputList.Add($"{textPath}\t{audioPath}\t{newTextPath}\t{newAudioPath}");
+                    //File.Copy(textPath, newTextPath);
+                    outputList.Add(newS);
                 }
             }
             File.WriteAllLines(outputPath, outputList);
@@ -383,6 +543,32 @@ namespace OfflineAudioProcessingSystem
         {
             FileInfo file = new FileInfo(filePath);
             return (file.DirectoryName, file.Name);
+        }
+
+        public void AddNewRecordingDataToMappingFile(string newAudioPath)
+        {
+            string outputRootPath = Path.Combine(@"F:\Tmp", $"{DateTime.Now:yyyyMMddhhmmss}.txt");
+            var list = Directory.EnumerateFiles(newAudioPath, "*.wav", SearchOption.AllDirectories)
+                .Select(x => CreateLine(x).Output());
+            File.WriteAllLines(outputRootPath, list);
+        }
+        private OverallMappingLine CreateLine(string filePath)
+        {
+            var r = GetFolder(filePath);
+            Wave w = new Wave();
+            w.ShallowParse(filePath);
+            var split = filePath.Split('\\').Reverse().ToArray();
+            return new OverallMappingLine
+            {
+                AudioFolder = r.Item1,
+                AudioName = r.Item2,
+                AudioPath = filePath,
+                AudioTime = w.AudioLength.ToString(),
+                Age = "",
+                Speaker = split[1],
+                //AudioId=split[0].Split('.')[0],
+                Dialect=split[2],
+            };
         }
 
         #region Match audio id.
@@ -474,5 +660,128 @@ namespace OfflineAudioProcessingSystem
         }
 
         #endregion
+
+        #region PostCheckAnnotationData
+        Regex ValidLineReg = new Regex("^(\\[[0-9.]+ [0-9.]+]) S[12] <([a-z\\-]+)>(.*)<([a-z\\-]+)\\/>$", RegexOptions.Compiled);
+        public void ValidateAllAnnotationData()
+        {
+            string rootPath = @"F:\WorkFolder\300hrsAnnotationNew";
+            foreach (string localeDirectory in Directory.EnumerateDirectories(rootPath))
+            {
+                foreach (string filePath in Directory.EnumerateFiles(localeDirectory, "*.txt", SearchOption.AllDirectories))
+                {
+                    ValidateSingleFile(filePath);
+                }
+            }
+        }
+        private void ValidateSingleFile(string filePath)
+        {
+            var list = File.ReadAllLines(filePath);
+            Sanity.Requires(list.Length % 2 == 0, "Line count is not even.");
+            bool trimLastInterval = false;
+            for(int i = 0; i < list.Length; i += 2)
+            {
+                string s1 = list[i];
+                string s2 = list[i + 1];
+                try
+                {
+                    ValidateSentencePair(s1, s2, i, list.Length);
+                }
+                catch(CommonException e)
+                {
+                    Console.WriteLine(filePath + "\t" + e.Message);
+                    if (e.HResult == 1)
+                        trimLastInterval = true;
+                }
+                catch(Exception e)
+                {
+                    Console.WriteLine($"Extra error:\t{filePath}\t{e.Message}");
+                }
+            }
+            if (trimLastInterval)
+                File.WriteAllLines(filePath, list.Take(list.Length - 2));
+        }
+        private void ValidateSentencePair(string s1, string s2, int i, int n)
+        {
+            Sanity.Requires(ValidLineReg.IsMatch(s1), "Line format error.");
+            Sanity.Requires(ValidLineReg.IsMatch(s2), "Line format error.");
+            var match1 = ValidLineReg.Match(s1);
+            var match2 = ValidLineReg.Match(s2);
+
+            string prefix1 = match1.Groups[2].Value;
+            string suffix1 = match1.Groups[4].Value;
+            Sanity.Requires(prefix1 == "chdialects", "Tag error.");
+            Sanity.Requires(prefix1 == suffix1, "Tag mismatch.");
+
+            string prefix2 = match2.Groups[2].Value;
+            string suffix2 = match2.Groups[4].Value;
+            Sanity.Requires(prefix2 == "chdialects-converted", "Tag error.");
+            Sanity.Requires(prefix2 == suffix2, "Tag mismatch");
+
+            string timeStamp1 = match1.Groups[1].Value;
+            string timeStamp2 = match2.Groups[1].Value;
+            Sanity.Requires(timeStamp1 == timeStamp2, $"Time stamp mismatch. {timeStamp1}");
+            double xmin1 = double.Parse(timeStamp1.Split(' ')[0].TrimStart('['));
+            double xmax1 = double.Parse(timeStamp1.Split(' ')[1].TrimEnd(']'));
+            if (i == n - 2)
+                Sanity.Requires(xmax1 > xmin1, $"Time stamp error, in the end. {xmin1}", 1);
+            else
+                Sanity.Requires(xmax1 > xmin1, $"Time stamp error. {xmin1}");
+
+            string content1 = match1.Groups[3].Value;
+            string content2 = match2.Groups[3].Value;
+            Sanity.Requires(!string.IsNullOrWhiteSpace(content1) && !string.IsNullOrWhiteSpace(content2), $"Empty content. {timeStamp1}");
+        }
+        #endregion
+
+
+        public void CalculateOutputHours(string workFolder)
+        {
+            string mappingPath = Path.Combine(workFolder, "OutputMapping.txt");
+            string outputPath = Path.Combine(workFolder, "Report.txt");
+            string fullPath = @"F:\WorkFolder\Summary\20210222\Important\OverallMappingAll.txt";
+            var dict = File.ReadLines(fullPath)
+                .Select(x => new OverallMappingLine(x))
+                .Select(x => new { x.AudioPath, x.Dialect, x.AudioTime })
+                .Distinct()
+                .ToDictionary(x => x.AudioPath.ToLower(), x => x);
+
+            var list = File.ReadLines(mappingPath);
+            var audioTimeDict = new Dictionary<string, double>();
+            foreach (string s in list)
+            {
+                var split = s.Split('\t');
+                string oldPath = split[2].ToLower();
+                var value = dict[oldPath];
+                if (!audioTimeDict.ContainsKey(value.Dialect))
+                    audioTimeDict[value.Dialect] = 0;
+                audioTimeDict[value.Dialect] += double.Parse(value.AudioTime);
+
+            }
+            var outputList = audioTimeDict.Select(x => $"{ x.Key}\t{x.Value:0.00}\t{x.Value / 3600:0.00}");
+            File.WriteAllLines(outputPath, outputList);
+        }
+
+        public void CalculateAudioHours(params string[] folders)
+        {
+            Dictionary<string, double> dict = new Dictionary<string, double>();
+            foreach(string folder in folders)
+            {
+                foreach(string localePath in Directory.EnumerateDirectories(folder))
+                {
+                    string locale = localePath.Split('\\').Last();
+                    if (!dict.ContainsKey(locale))
+                        dict.Add(locale, 0);
+                    dict[locale] += GetFolderHours(localePath);
+                }
+            }
+            var list = dict.Select(x => $"{x.Key}\t{x.Value}\t{x.Value / 3600:0.00}");
+            File.WriteAllLines(GetCurrentTmpFile(), list);
+        }
+
+        private string GetCurrentTmpFile()
+        {
+            return Path.Combine(@"f:\tmp", $"{DateTime.Now:yyyyMMddhhmmss}.txt");
+        }
     }
 }

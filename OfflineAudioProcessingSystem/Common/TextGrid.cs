@@ -42,7 +42,9 @@ namespace OfflineAudioProcessingSystem
         {
             List<TextGridInterval> hgList = new List<TextGridInterval>();
             List<TextGridInterval> sgList = new List<TextGridInterval>();
-            foreach (var interval in sequence)
+            var r = sequence.ToArray();
+            Sanity.Requires(r.Length > 2, "Overall file problem.");
+            foreach (var interval in r)
             {
                 string content = GetContent(interval);
                 if (!string.IsNullOrEmpty(content) && GetRaw(content) != "<unknown/>")
@@ -69,6 +71,7 @@ namespace OfflineAudioProcessingSystem
 
         private static IEnumerable<string> MergeIntermediaIntervals(string sgPath, string hgPath)
         {
+            
             var sgList = File.ReadLines(sgPath).Select(x => new TextGridLine(x)).ToArray();
             var hgList = File.ReadLines(hgPath).Select(x => new TextGridLine(x)).ToArray();
             Sanity.Requires(hgList.Length == sgList.Length, "Interval count mismatch.");
