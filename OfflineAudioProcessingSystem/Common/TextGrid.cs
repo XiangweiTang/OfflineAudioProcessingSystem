@@ -21,12 +21,14 @@ namespace OfflineAudioProcessingSystem
         {
             Reject = false;
             AllList = new List<string>();
-            if (!usingExistingSgHg)
+            if (!usingExistingSgHg||!File.Exists(sgIntermeidaPath)||!File.Exists(hgIntermediaPath))
             {
                 var textgridTextList = File.ReadLines(textGridPath);
                 var textList = GetIntervalsNew(textgridTextList);
                 OutputIntermediaIntervals(textList, sgIntermeidaPath, hgIntermediaPath);
             }
+            if (!File.Exists(sgIntermeidaPath) && !File.Exists(hgIntermediaPath))
+                return;
             var outputList = MergeIntermediaIntervals(sgIntermeidaPath, hgIntermediaPath).ToArray();
             if (outputList.Length == 0)
             {
@@ -74,12 +76,17 @@ namespace OfflineAudioProcessingSystem
             
             var sgList = File.ReadLines(sgPath).Select(x => new TextGridLine(x)).ToArray();
             var hgList = File.ReadLines(hgPath).Select(x => new TextGridLine(x)).ToArray();
+            for(int i = 0; i < hgList.Length && i < sgList.Length; i++)
+            {
+                Sanity.Requires(sgList[i].XMin == hgList[i].XMin, $"Interval mismatch, {sgList[i].XMin}");
+                Sanity.Requires(sgList[i].XMax == hgList[i].XMax, $"Interval mismatch, {hgList[i].XMax}");
+            }
             Sanity.Requires(hgList.Length == sgList.Length, "Interval count mismatch.");
             for(int i = 0; i < sgList.Length; i++)
             {
-                double diff1 = Math.Abs(double.Parse(sgList[i].XMin) - double.Parse(hgList[i].XMin));
-                double diff2 = Math.Abs(double.Parse(sgList[i].XMax) - double.Parse(hgList[i].XMax));
-                Sanity.Requires(diff1 <= 1 && diff2 <= 1, "Time stamp mismatch.");
+                //double diff1 = Math.Abs(double.Parse(sgList[i].XMin) - double.Parse(hgList[i].XMin));
+                //double diff2 = Math.Abs(double.Parse(sgList[i].XMax) - double.Parse(hgList[i].XMax));
+                //Sanity.Requires(diff1 <= 1 && diff2 <= 1, $"Time stamp mismatch. {sgList[i].XMin}");
                 hgList[i].XMin = sgList[i].XMin;
                 hgList[i].XMax = sgList[i].XMax;
                 yield return sgList[i].OutputSpecific();
@@ -230,12 +237,16 @@ namespace OfflineAudioProcessingSystem
 
         private static string SetTextGridItemHeader(string[] timeStampArray, int itemID)
         {
+            string[] array = { "SG", "HG" };
             string internalPath = "OfflineAudioProcessingSystem.Internal.Data.TextGridItemHeader.txt";
             string s = IO.ReadEmbedAll(internalPath, "OfflineAudioProcessingSystem");
             string xmin = timeStampArray[0].Split('\t')[0];
             int n = timeStampArray.Length;
+            var a = timeStampArray[n - 1];
+            var b = a.Split('\t');
+            var c = b[1];
             string xmax = timeStampArray[n - 1].Split('\t')[1];
-            return string.Format(s, itemID, xmin, xmax, n);            
+            return string.Format(s, itemID, xmin, xmax, n,array[itemID-1]);            
         }
 
         private static IEnumerable<string> SetTextGridBody(string[] timeStampArray)

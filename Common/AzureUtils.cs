@@ -22,8 +22,13 @@ namespace Common
         }
         public static void Test()
         {
-            string path = "https://marksystemapistorage.blob.core.windows.net/dechcollectionsachived/300hrsRecordingContent/St.%20Gallen/ID_01_Toman/";
-            var r = ListCurrentBlobs(path);
+            string path = "https://marksystemapistorage.blob.core.windows.net/dechcollection2020/23-01-2021/VISP/";
+            var uri = new Uri(path);
+            var r1 = ListCurrentBlobs(path);
+            BlobContainerClient bcc = new BlobContainerClient(uri);
+            var r = bcc.GetBlobs().AsPages().SelectMany(x => x.Values)
+                .Select(x => x.Name.Split('.').Last()).Distinct().ToArray();
+            
         }
         public static string SetSasToken(string fullUriString)
         {

@@ -50,7 +50,7 @@ namespace OfflineAudioProcessingSystem
         public string AudioName { get; set; }
         public string Speaker { get; set; }
         public string Gender { get; set; }
-        public string Age { get; set; }
+        public string Age { get; set; } = "0";
         public string Dialect { get; set; }
         public string AudioFolder { get; set; }
         public string AudioPath { get; set; }

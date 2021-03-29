@@ -11,5 +11,7 @@ namespace Common
         public const string AZURE_ROOT_PATH = "https://marksystemapistorage.blob.core.windows.net";
         public const string OVERALL_MAPPING_PATH = @"F:\WorkFolder\Summary\20210222\Important\OverallMappingAll.txt";
         public const string SPEAKER_DICT_PATH = @"F:\WorkFolder\Summary\20210222\Important\Iddict.txt";
+        public const string TRANS_MAPPING_PATH = @"F:\WorkFolder\Summary\20210222\Important\TransMapping.txt";
+        public const string ANNOTATION_ROOT_PATH = @"F:\WorkFolder\Transcripts";
     }
 }

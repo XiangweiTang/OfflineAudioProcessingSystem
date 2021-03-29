@@ -61,5 +61,13 @@ namespace Common
             string ext = fileName.Substring(i);
             return (rawName, ext);
         }
+        public static void WriteAllLinesToTmp(IEnumerable<string> list)
+        {
+            File.WriteAllLines(GetCurrentTmpFile(), list);
+        }
+        public static string GetCurrentTmpFile()
+        {
+            return Path.Combine(@"f:\tmp", $"{DateTime.Now:yyyyMMddhhmmss}.txt");
+        }
     }
 }

@@ -59,10 +59,10 @@ namespace OfflineAudioProcessingSystem
             RunSox(arguments);
         }
 
-        public static void SetTimeStampsWithVad(string inputAudioPath, string outputTimeStampFilePath)
+        public static void SetTimeStampsWithVad(string inputAudioPath, string outputTimeStampFilePath, int cutLevel)
         {
             // The python was from: https://github.com/wiseman/py-webrtcvad
-            RunFile.RunPython(PythonPath, VadScriptPath, "3", inputAudioPath.WrapPath(), outputTimeStampFilePath.WrapPath());
+            RunFile.RunPython(PythonPath, VadScriptPath, cutLevel.ToString(), inputAudioPath.WrapPath(), outputTimeStampFilePath.WrapPath());
         }
 
         public static bool BinaryIdentical(Stream fs1, int offset1, Stream fs2, int offset2)

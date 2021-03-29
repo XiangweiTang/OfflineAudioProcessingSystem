@@ -1,6 +1,6 @@
 ﻿    item [{0}]:
         class = "IntervalTier" 
-        name = "SG" 
+        name = "{4}" 
         xmin = {1} 
         xmax = {2}
         intervals: size = {3}

@@ -101,42 +101,30 @@ namespace OfflineAudioProcessingSystem
                     return w.AudioLength;
                 });
         }
-        private void ExpendOldInfoDict(string outputPath)
+
+        public void CreateLinesForNewAudios(params string[] folders)
         {
-            var dict = GetOldInfoDict();
-            var list = GetOnlineFromExcel(@"f:\Tmp\Online20210308.txt");
-            foreach(var line in list)
-            {
-                if (dict.ContainsKey(line.AudioPlatformId.ToString()))
-                    continue;
-                OverallMappingLine newLine = new OverallMappingLine
-                {
-                    AudioId = line.AudioPlatformId.ToString(),
-                    TaskId = line.TaskId.ToString(),
-                    TaskName = line.TaskName,
-                    AudioName = line.AudioName,
-                };
-                dict.Add(line.AudioPlatformId.ToString(), newLine);
-            }
-            File.WriteAllLines(outputPath, dict.Select(x => x.Value.Output()));
+            var list = folders.SelectMany(x => Directory.EnumerateFiles(x, "*.wav", SearchOption.AllDirectories))
+                .Select(x => GetLine(x).Output());
+            IO.WriteAllLinesToTmp(list);
         }
-        private Dictionary<string, OverallMappingLine> GetOldInfoDict()
+        private OverallMappingLine GetLine(string filePath)
         {
-            string path = @"f:\WorkFolder\Summary\20210222\Important\Old_WithSR.txt";
-            return File.ReadLines(path)
-                .Select(x => new OverallMappingLine(x))
-                .ToDictionary(x => x.AudioId, x => x);
+            OverallMappingLine l = new OverallMappingLine();
+            var r1 = GetFolder(filePath);
+            l.AudioName = r1.File;
+            l.AudioFolder = r1.Folder;
+            l.AudioPath = filePath.ToLower();
+            Wave w = new Wave();
+            w.ShallowParse(filePath);
+            l.AudioTime = w.AudioLength.ToString("0.00");
+            return l;
         }
         private IEnumerable<string> GetAllLocalFiles()
         {
             string rootPath = @"f:\WorkFolder\Input\300hrsRecordingContent";
             return Directory.EnumerateFiles(rootPath, "*.wav", SearchOption.AllDirectories)
                 .Select(x => x.ToLower());
-        }
-        private IEnumerable<AnnotationLine> GetOnlineFromExcel(string path)
-        {
-            return File.ReadLines(path)
-                .Select(x => new AnnotationLine(x));
         }
 
         public void CreateMetaData()
@@ -782,6 +770,43 @@ namespace OfflineAudioProcessingSystem
         private string GetCurrentTmpFile()
         {
             return Path.Combine(@"f:\tmp", $"{DateTime.Now:yyyyMMddhhmmss}.txt");
+        }
+
+        Regex OscarDdReg = new Regex("([a-zA-Z]{4,10})-([0-9]{5})-([0-9]{5})", RegexOptions.Compiled);
+
+        public IEnumerable<string> GetFilePathFromOscarId(IEnumerable<string> oscarIdSequence)
+        {
+            var dict = GetTransMappingDict();
+            return oscarIdSequence
+                .Select(x => ExtractOscarId(x))
+                .Select(x => string.Join("_", x.Dialect, x.SpeakerId, x.AudioId))
+                .Select(x => dict[x]);
+        }
+        public (string Dialect, string SpeakerId, string AudioId) ExtractOscarId(string oscarId)
+        {
+            var match = OscarDdReg.Match(oscarId);
+            Sanity.Requires(match.Success, $"Invalid Id.\t{oscarId}");
+            string dialect = match.Groups[1].Value;
+            string speakerId = match.Groups[2].Value;
+            string audioId = match.Groups[3].Value;
+            return (dialect, speakerId, audioId);
+        }
+
+        public Dictionary<string,string> GetTransMappingDict()
+        {
+            return File.ReadLines(Constants.TRANS_MAPPING_PATH)
+                .Select(x => GetTransMappingInfo(x))
+                .ToDictionary(x => x.Key, x => x.Value);
+        }
+
+        private (string Key, string Value) GetTransMappingInfo(string s)
+        {
+            var split = s.Split('\t');
+            string textPath = split[3];
+            var parts = textPath.Split('.')[0].Split('\\');
+            string key = string.Join("_", parts[3], parts[4], parts[5]);
+            string value = split[0];
+            return (key, value);
         }
     }
 }

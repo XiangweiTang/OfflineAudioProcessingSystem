@@ -13,14 +13,17 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
     {
         public string BlackListPath { get; set; } = @"BlackList.txt";
         public string ManuallyPath { get; set; } = @"Manually.txt";
-        public string AllPath { get; set; } = "All.txt";
+        public string AllPath { get; set; } = "All.txt";        
         public string InputRootPath { get; set; } = @"";
         public string OutputRootPath { get; set; } = @"";
         public string MappingPath { get; set; } = @"";
         public string MissingPath { get; set; } = "";
         public string AudioTimePath { get; set; } = "";
+        public string InputAudioTimePath { get; set; } = "";
         const int MAX_SHOW_COUNT = 50;
         List<string> FullList = new List<string>();
+        //List<string> PostCheckList = new List<string>();
+        List<string> InputAudioList = new List<string>();
         public TranscriptValidation()
         {
         }
@@ -34,6 +37,7 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
             Init();
             ValidateFolder(InputRootPath, specificPath, ignoreDialectTag);            
             File.WriteAllLines(AllPath, FullList);
+            File.WriteAllLines(InputAudioTimePath, InputAudioList);
         }
         public void RunUpdate(Dictionary<string,AnnotationLine> set, bool create = false)
         {
@@ -71,6 +75,18 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
         {            
             foreach (string filePath in Directory.EnumerateFiles(inputRootPath, "*.txt", SearchOption.AllDirectories))
             {
+                string overallAudioPath;
+                string inputAudioPath1 = filePath.Substring(0, filePath.Length - 3) + "wav";
+                string inputAudioPath2 = filePath.Replace(".txt", ".wav");
+                if (File.Exists(inputAudioPath1))
+                    overallAudioPath = inputAudioPath1;
+                else if (File.Exists(inputAudioPath2))
+                    overallAudioPath = inputAudioPath2;
+                else
+                    throw new CommonException("Audio missing.");                
+                Wave w = new Wave();
+                w.ShallowParse(overallAudioPath);
+                InputAudioList.Add($"{overallAudioPath}\t{w.AudioLength}"); ;
                 ValidateFile(filePath, specificPath,ignoreDialectTag);
                 ValidateFileAll(filePath,specificPath,ignoreDialectTag);
             }
@@ -180,6 +196,8 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                     string alterKey = $"{taskId}\t{alterName}";
                     if (validKeySet == null||validKeySet.Keys.Contains(key) || validKeySet.Keys.Contains(alterKey))
                     {
+                        if (!ValidateFileAll(textPath))
+                            continue;
                         var list = ValidateFile(textPath);
                         string audioPath = Path.Combine(speakerFolder, audioName);
                         Wave w = new Wave();
@@ -233,20 +251,20 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                 Directory.CreateDirectory(outputTaskFolder);
                 foreach (string tgFilePath in Directory.EnumerateFiles(taskFolder))
                 {
+                    string fileName = tgFilePath.GetFileName().Item1;
+                    string sgPath = Path.Combine(outputTaskFolder, fileName + ".txt.sg");
+                    string hgPath = Path.Combine(outputTaskFolder, fileName + ".txt.hg");
                     try
                     {
-                        string fileName = tgFilePath.GetFileName().Item1;
                         string wavePath = Path.Combine(audioTaskFolder, fileName + ".wav");
                         string outputTextFilePath = Path.Combine(outputTaskFolder, fileName + ".txt");
                         string outputWaveFilePath = Path.Combine(outputTaskFolder, fileName + ".wav");
-                        string sgPath = Path.Combine(outputTaskFolder, fileName + ".txt.sg");
-                        string hgPath = Path.Combine(outputTaskFolder, fileName + ".txt.hg");
                         TextGrid.TextGridToText(tgFilePath, outputTextFilePath, sgPath,hgPath, useExistingSgHg);
                         string outputWavePath = Path.Combine(outputTaskFolder, fileName + ".wav");
                         if (!TextGrid.Reject)
                         {
                             Sanity.Requires(File.Exists(wavePath));
-                            File.Copy(wavePath, outputWavePath);
+                            File.Copy(wavePath, outputWavePath, true);
                         }
                         else
                         {
@@ -254,8 +272,12 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                         }
                     }catch(CommonException ce)
                     {
-                        Console.WriteLine(tgFilePath + "\t" + ce.Message);
-                        reportList.Add(tgFilePath + "\t" + ce.Message);
+                        string s1 = $"{sgPath}\t{ce.Message}";
+                        string s2 = $"{hgPath}\t{ce.Message}";
+                        Console.WriteLine(s1);
+                        Console.WriteLine(s2);
+                        reportList.Add(s1);
+                        reportList.Add(s2);
                     }
                 }
             }
@@ -323,16 +345,20 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
             "Non-digit char.",         //  14
             "No speaker ID",    //  15
             "Empty content",    //  16
+            "Tag mismatch",     //  17
+            "Word count mismatch",      //  18
+            "Too many UNK",     //  19            
         };
 
         string TimeStampString = "";
-        private void ValidateFileAll(string filePath, string specificPath="", bool ignoreDialectTag=false, bool addDialectTag=false)
+        private bool ValidateFileAll(string filePath, string specificPath="", bool ignoreDialectTag=false, bool addDialectTag=false)
         {
             if (filePath == specificPath)
                 ;
             var r = File.ReadLines(filePath).Where(x => !string.IsNullOrWhiteSpace(x)).ToArray();
             string taskNameContent = GetTaskFormat(filePath);
             List<TransLine> list = new List<TransLine>();
+            bool valid = true;
             try
             {
                 Sanity.Requires(r.Length > 2, filePath, 1);
@@ -351,8 +377,9 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                     }
                     catch(CommonException e)
                     {
-                        string content = $"{filePath}\t{taskNameContent}\t{TransErrorArray[e.HResult]}\t{TimeStampString}";                        
-                        FullList.Add(content);                        
+                        string content = $"{filePath}\t{taskNameContent}\t{TransErrorArray[e.HResult]}\t{s}";                        
+                        FullList.Add(content);
+                        valid = false;
                     }
                 }
             }
@@ -360,7 +387,11 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
             {
                 string content = $"{filePath}\t{taskNameContent}\t{TransErrorArray[e.HResult]}";
                 FullList.Add(content);
+                valid = false;
             }
+            if (valid)
+                valid = ValidateTransLineList(list, filePath, taskNameContent);
+            return valid;
         }
         private List<TransLine> ValidateFile(string filePath, string specificPath = "", bool ignoreDialectTag = false, bool addDialectTag = false)
         {
@@ -435,6 +466,67 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                 return null;
             }
             return list;
+        }
+
+        private bool ValidateTransLineList(List<TransLine> list, string filePath, string taskNameContent)
+        {
+            int unkCount = 0;
+            for(int i = 0; i < list.Count; i+=2)
+            {
+                string so = "";
+                string sc = "";
+                try
+                {
+                    int u;
+                    var oLine = list[i];
+                    so = OutputTransLine(oLine);
+                    var cLine = list[i + 1];
+                    sc = OutputTransLine(cLine);
+                    ValidateTransLinePair(oLine, cLine, out u);
+                    unkCount += u;
+                    
+                }
+                catch(CommonException e)
+                {
+                    string contentO = $"{filePath}\t{taskNameContent}\t{TransErrorArray[e.HResult]}\t{so}";
+                    string contentC = $"{filePath}\t{taskNameContent}\t{TransErrorArray[e.HResult]}\t{sc}";
+                    FullList.Add(contentO);
+                    FullList.Add(contentC);
+                    return false;
+                }
+            }
+            try
+            {
+                Sanity.Requires(unkCount <= 5, 19);
+            }
+            catch(CommonException e)
+            {
+                string content = $"{filePath}\t{taskNameContent}\t{TransErrorArray[e.HResult]}\t";
+                FullList.Add(content);
+                return false;
+            }
+            return true;
+        }
+
+        private void ValidateTransLinePair(TransLine oLine, TransLine cLine, out int unkCount)
+        {
+            Sanity.Requires(oLine.StartTime == cLine.StartTime, 9);
+            Sanity.Requires(oLine.EndTime == cLine.EndTime, 9);
+            Sanity.Requires(oLine.StartTime < oLine.EndTime, 9);
+
+
+            var oTags = TagReg.Matches(oLine.Content).Cast<Match>().Select(x => x.Value).ToArray();
+            var cTags = TagReg.Matches(cLine.Content).Cast<Match>().Select(x => x.Value).ToArray();
+            Sanity.Requires(oTags.SequenceEqual(cTags), 17);
+
+            int oCount = oLine.Content.Split(' ').Length;
+            int cCount = cLine.Content.Split(' ').Length;
+
+            Sanity.Requires(oCount * 1.3 >= cCount || oCount + 1 >= cCount, 18);
+            Sanity.Requires(cCount * 1.3 >= oCount || cCount + 1 >= oCount, 18);
+
+
+            unkCount = oTags.Where(x => x == "<UNKNOWN/>").Count();
         }
         private void OutputFile(string outputRootPath, string filePath, MappingLine mappingLine)
         {

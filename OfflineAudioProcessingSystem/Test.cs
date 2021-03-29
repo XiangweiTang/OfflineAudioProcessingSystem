@@ -20,9 +20,28 @@ namespace OfflineAudioProcessingSystem
 
         public Test(string[] args)
         {
-            RunFullMapping();
-        }
+            //RunFullMapping();
 
+            //RunTest();
+            AzureUtils.Test();
+        }
+        private void MergeReport()
+        {
+            List<string> outputList = new List<string>();
+            foreach(string offlinePath in Directory.EnumerateDirectories(Constants.ANNOTATION_ROOT_PATH, " * offline"))
+            {
+                string batchName = offlinePath.Split('\\').Last();
+                string allPath = Path.Combine(offlinePath, "All.txt");
+                outputList.AddRange(File.ReadLines(allPath).Select(x => $"{batchName}\t{x}"));
+            }
+            foreach(string onlinePath in Directory.EnumerateDirectories(Constants.ANNOTATION_ROOT_PATH, "*online"))
+            {
+                string batchName = onlinePath.Split('\\').Last();
+                string allPath = Path.Combine(onlinePath, "AllFilter.txt");
+                outputList.AddRange(File.ReadLines(allPath).Select(x => $"{batchName}\t{x}"));
+            }
+            IO.WriteAllLinesToTmp(outputList);
+        }
         private void VerifyDF()
         {
             string rootPath = @"F:\WorkFolder\Transcripts";
@@ -39,6 +58,22 @@ namespace OfflineAudioProcessingSystem
                 Sanity.Requires(list.Length == outputList.Count);
                 File.WriteAllLines(mappingPath, outputList);
             }
+        }
+
+        private void RunTest()
+        {
+            /// Add dialect
+            //AddDialect(@"F:\WorkFolder\Transcripts\20210329_Online\Input\677_Basel 21.12.2020 Viste\Speaker\Basel-Baseldeutsch3.txt");
+
+            /// Validate trans.
+            RunTransValidation(@"F:\WorkFolder\Transcripts\20210329_Online");
+
+            /// Update trans.
+            //RunTransUpdate(@"F:\WorkFolder\Transcripts\20210329_Offline");
+
+            /// Merge text grid.
+            //MergeOfflineData(@"F:\WorkFolder\Transcripts\20210329_Offline", true);
+
         }
         private void RunFullMapping()
         {
@@ -76,7 +111,10 @@ namespace OfflineAudioProcessingSystem
             //fm.CreateSpeakerInfoFile();
 
             //fm.OutputRecordingStatusByTeam();
-            fm.OutputRecordingStatusByGenderLocale();
+            //fm.OutputRecordingStatusByGenderLocale();
+
+            /// When new audios are coming, add the info.
+            fm.CreateLinesForNewAudios(@"F:\WorkFolder\Input\300hrsRecordingContent\20210324", @"F:\WorkFolder\Input\300hrsRecordingContent\20210326");
         }
         
         private void MergeDict()
@@ -156,10 +194,15 @@ namespace OfflineAudioProcessingSystem
             File.WriteAllLines(path, list);
         }
 
-        private void GenerateTimeStamp(string folderPath)
+        private void GenerateTimeStamp(string folderPath, int cutLevel=3)
         {
-            TimeStampTransfer t = new TimeStampTransfer();
+            TimeStampTransfer t = new TimeStampTransfer()
+            {
+                CutLevel = cutLevel
+            };
             t.Run(folderPath, folderPath);
+            TextGridTransfer tgt = new TextGridTransfer();
+            tgt.Run(folderPath, folderPath);
         }
 
         private IEnumerable<string> GettBottomFolders(string rootPath)
@@ -298,6 +341,9 @@ namespace OfflineAudioProcessingSystem
             string annotatorPath = Path.Combine(workFolder, "FromAnnotation.txt");
             string reportPath = Path.Combine(workFolder, "Report.txt");
             string missingPath = Path.Combine(workFolder, "Missing.txt");
+            string toAnnnotatorPath = Path.Combine(workFolder, "ToAnnotator.txt");
+            string inputAudioTimePath = Path.Combine(workFolder, "AudioTimeInput.txt");
+            string inputAudioTimeFilterPath = Path.Combine(workFolder, "AudioTimeInputFilter.txt");
             bool offline = workFolder.ToLower().Split('_').Last() == "offline";
             var diff = Compare(annotatorPath, inputRootPath, offline);
             if (diff.Length > 0)
@@ -316,13 +362,20 @@ namespace OfflineAudioProcessingSystem
                 InputRootPath = inputRootPath,
                 AllPath = allPath,
                 MissingPath = missingPath,
+                InputAudioTimePath=inputAudioTimePath
             };
             t.RunValidation(specificPath,ignoreDialectTag);
             var set = GetSetFromAnnotator(annotatorPath);
             FilterReport(set, blackListPath, blackListFilterPath);
             FilterReport(set, manuallyPath, manuallFilterPath);
             FilterAll(set, allPath, allFilterPath);
+            FilterAudioTime(set, inputAudioTimePath, inputAudioTimeFilterPath);
             GenerateAllReport(allFilterPath, reportPath);
+            string batchName = workFolder.Split('\\').Last();
+            if (File.Exists(annotatorPath))
+                ReorgAll(batchName, allFilterPath, toAnnnotatorPath, ReorgAllOnline);
+            else
+                ReorgAll(batchName, allPath, toAnnnotatorPath, ReorgAllOffline);
         }
         private void RunTransUpdate(string workFolder, bool onLine=true)
         {
@@ -365,7 +418,7 @@ namespace OfflineAudioProcessingSystem
             File.WriteAllLines(o, list);
         }
 
-        private void FilterAll(Dictionary<string,AnnotationLine> set, string i, string o)
+        private void FilterAll(Dictionary<string, AnnotationLine> set, string i, string o)
         {
             List<string> list = new List<string>();
             foreach (string s in File.ReadLines(i))
@@ -374,7 +427,27 @@ namespace OfflineAudioProcessingSystem
                 string name = s.Split('\t')[2];
                 string key = $"{id}\t{name}.wav";
                 if (set.ContainsKey(key))
-                    list.Add(s+"\t"+set[key].Output());
+                    list.Add(s + "\t" + set[key].Output());
+            }
+            File.WriteAllLines(o, list);
+        }
+
+        private void FilterAudioTime(Dictionary<string,AnnotationLine> dict, string i, string o)
+        {
+            List<string> list = new List<string>();
+            var set = dict.Keys.ToHashSet();
+            foreach(string s in File.ReadLines(i))
+            {
+                var r = GetFolder(s.Split('\t')[0]);
+                string name = r.file;
+                string folder = r.folder.Replace("\\Speaker", "");
+                string id = folder.Split('\\').Last().Split('_')[0];
+                string key = $"{id}\t{name}";
+                if (dict.ContainsKey(key))
+                {
+                    list.Add(s + "\t" + dict[key].Output());
+                    set.Remove(key);
+                }
             }
             File.WriteAllLines(o, list);
         }
@@ -382,6 +455,39 @@ namespace OfflineAudioProcessingSystem
         {
             var list = File.ReadLines(i).Select(x => Reorg(x));
             File.WriteAllLines(o, list);
+        }
+        private void ReorgAll(string batch, string allFilterPath, string allToAnnotatorPath, Func<string,string,string> f)
+        {
+            var list = File.ReadLines(allFilterPath)
+                .Select(x => f(x, batch));
+            File.WriteAllLines(allToAnnotatorPath, list);
+        }
+        private string ReorgAllOnline(string input, string batch)
+        {
+            var split = input.Split('\t');
+            return string.Join("\t",
+                batch,
+                split[6],
+                split[9],
+                split[5],
+                split[8],
+                split[3],
+                split[4]
+                );
+        }
+
+        private string ReorgAllOffline(string input, string batch)
+        {
+            var split = input.Split('\t');
+            return string.Join("\t",
+                batch,
+                split[1],
+                split[2],
+                "",
+                "",
+                split[3],
+                split[4]
+                );
         }
         private string Reorg(string s)
         {
@@ -758,6 +864,7 @@ namespace OfflineAudioProcessingSystem
     }
     class TimeStampTransfer : FolderTransfer
     {
+        public int CutLevel { get; set; } = 3;
         protected override IEnumerable<string> GetItems(string inputFolderPath)
         {
             return Directory.EnumerateFiles(inputFolderPath, "*.wav");
@@ -769,7 +876,7 @@ namespace OfflineAudioProcessingSystem
         }
         protected override void ItemTransfer(string inputPath, string outputPath)
         {
-            LocalCommon.SetTimeStampsWithVad(inputPath, outputPath);
+            LocalCommon.SetTimeStampsWithVad(inputPath, outputPath, CutLevel);
         }
     }
     class Rename : FolderTransfer

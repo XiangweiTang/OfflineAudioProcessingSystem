@@ -216,7 +216,7 @@ namespace OfflineAudioProcessingSystem.AudioTransfer
                         string outputTimeStampPath = outputPath.Replace(".wav", ".txt");
                         if (File.Exists(outputTimeStampPath))
                             File.Delete(outputTimeStampPath);
-                        LocalCommon.SetTimeStampsWithVad(outputPath, outputTimeStampPath);
+                        SetTimeStamp(outputPath, outputTimeStampPath);
                         CheckTimeStamp(outputTimeStampPath);
                         Sanity.Requires(File.Exists(outputTimeStampPath));
                         string outputTextGridPath = outputPath.Replace(".wav", ".textgrid");
@@ -245,7 +245,37 @@ namespace OfflineAudioProcessingSystem.AudioTransfer
                     File.Delete(outputPath);
             }
         }
+        private void SetTimeStamp(string inputPath, string outputPath)
+        {
+            int cutLevel = 0;
+            bool timeStampValid;
+            do
+            {
+                cutLevel++;
+                LocalCommon.SetTimeStampsWithVad(inputPath, outputPath, cutLevel);
+                timeStampValid = PostCheckTimeStampFile(outputPath);
+            } while (cutLevel < 3 && !timeStampValid);
+            if (!timeStampValid)
+                File.Delete(outputPath);
+        }
 
+        private bool PostCheckTimeStampFile(string path)
+        {
+            var list = File.ReadAllLines(path);
+            List<string> outputList = new List<string>();
+            for(int i = 0; i < list.Length; i++)
+            {
+                double xmin = double.Parse(list[i].Split('\t')[0]);
+                double xmax = double.Parse(list[i].Split('\t')[1]);
+                if (xmin >= xmax)
+                    continue;
+                if (xmax - xmin >= 24)
+                    return false;
+                outputList.Add($"{xmin}\t{xmax}");
+            }
+            File.WriteAllLines(path, outputList);
+            return true;
+        }
         private void CheckTimeStamp(string timeStampPath)
         {
             var list = File.ReadAllLines(timeStampPath);
