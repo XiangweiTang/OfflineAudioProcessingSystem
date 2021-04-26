@@ -105,7 +105,11 @@
     <Compile Include="Common\LocalConstants.cs" />
     <Compile Include="Features\TranscriptValidation\ConfigTranscriptValidation.cs" />
     <Compile Include="Features\TranscriptValidation\Mapping.cs" />
+    <Compile Include="Features\TranscriptValidation\OneOffTasks.cs" />
+    <Compile Include="Features\TranscriptValidation\TokenMapping.cs" />
     <Compile Include="Features\TranscriptValidation\TranscriptValidation.cs" />
+    <Compile Include="Features\TranscriptValidation\ValidateAndUpdateFile.cs" />
+    <Compile Include="Features\TranscriptValidation\ValidateAndUpdateFolder.cs" />
     <Compile Include="FullMapping.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

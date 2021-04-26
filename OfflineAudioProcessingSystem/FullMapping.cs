@@ -11,7 +11,11 @@ namespace OfflineAudioProcessingSystem
 {
     class FullMapping
     {
-        public FullMapping() { }
+        public FullMapping()
+        {
+            GetTransFilePathMappingDict();
+            SetOscarMappingDict();
+        }
         Regex NumberReg = new Regex("^[0-9_]+$", RegexOptions.Compiled);
         public void OutputRecordingStatusByGenderLocale()
         {
@@ -22,6 +26,8 @@ namespace OfflineAudioProcessingSystem
                 .ToDictionary(x => x.MergedId, x => x);
             HashSet<string> existingPathSet = new HashSet<string>();
             Dictionary<string, double> statusDict = new Dictionary<string, double>();
+            Dictionary<string, double> GenderDict = new Dictionary<string, double>();
+            Dictionary<string, double> LocaleDict = new Dictionary<string, double>();
             foreach(var line in list)
             {
                 string audioPath = line.AudioPath.ToLower();
@@ -29,16 +35,31 @@ namespace OfflineAudioProcessingSystem
                     continue;
                 existingPathSet.Add(audioPath);
                 string key;
+                string genderKey;
                 if (!dict.ContainsKey(line.MergedId))
-                    key = $"{line.Dialect}_{line.Gender}";
+                {
+                    key = $"{line.Dialect}_{line.Gender.ToLower()}";
+                    genderKey = line.Gender.ToLower();
+                }
                 else
-                    key = $"{line.Dialect}_{dict[line.MergedId].Gender}";
+                {
+                    key = $"{line.Dialect}_{dict[line.MergedId].Gender.ToLower()}";
+                    genderKey = dict[line.MergedId].Gender.ToLower();
+                }
                 if (!statusDict.ContainsKey(key))
                     statusDict[key] = 0;
                 statusDict[key] += double.Parse(line.AudioTime);
+                if (!LocaleDict.ContainsKey(line.Dialect))
+                    LocaleDict[line.Dialect] = 0;
+                if (!GenderDict.ContainsKey(genderKey))
+                    GenderDict[genderKey] = 0;
+                LocaleDict[line.Dialect] += double.Parse(line.AudioTime);
+                GenderDict[genderKey] += double.Parse(line.AudioTime);
             }
-            var outputList = statusDict.OrderBy(x => x.Key).Select(x => $"{x.Key}\t{x.Value}");
-            File.WriteAllLines(GetCurrentTmpFile(), outputList);
+            var outputList = statusDict.OrderBy(x => x.Key).Select(x => $"{x.Key}\t{x.Value}")
+                .Concat(LocaleDict.OrderBy(x => x.Key).Select(x => $"{x.Key}\t{x.Value}"))
+                .Concat(GenderDict.Select(x => $"{x.Key}\t{x.Value}"));
+            outputList.WriteAllLinesToTmp();            
         }
         public void OutputRecordingStatusByTeam()
         {
@@ -250,6 +271,16 @@ namespace OfflineAudioProcessingSystem
             }
             outputList.Add($"Total\t{total}\t{total / 3600}");
             File.WriteAllLines(@"F:\WorkFolder\300hrsAnnotationNew\Report.txt", outputList);
+        }
+
+        public IEnumerable<string> GetOnlineFolders()
+        {
+            return Directory.EnumerateDirectories(@"F:\WorkFolder\Transcripts", "*online");
+        }
+
+        public IEnumerable<string> GetOfflineFolders()
+        {
+            return Directory.EnumerateDirectories(@"F:\WorkFolder\Transcripts", "*offline");
         }
 
         #region Output data mapping
@@ -559,6 +590,37 @@ namespace OfflineAudioProcessingSystem
             };
         }
 
+        public void AddOnlineInfo(string partFilePath, string onlineStatusFilePath)
+        {
+            var list = File.ReadLines(partFilePath);
+            List<string> oList = new List<string>();
+
+            var dict = new Dictionary<string, AnnotationLine>();
+            foreach(string s in File.ReadLines(onlineStatusFilePath))
+            {
+                var line = new AnnotationLine(s);
+                string key = $"{line.TaskName.Split('_').Last()}|{line.AudioName}";
+                var value = line;
+                dict[key] = value;
+            }
+            foreach(string s in list)
+            {
+                OverallMappingLine line = new OverallMappingLine(s);
+                string key = $"{line.Speaker}|{line.AudioName}";
+                if (!dict.ContainsKey(key))
+                    oList.Add(s);
+                else
+                {
+                    var value = dict[key];
+                    line.TaskId = value.TaskId.ToString();
+                    line.TaskName = value.TaskName;
+                    line.AudioId = value.AudioPlatformId.ToString();
+                    oList.Add(line.Output());
+                }
+            }
+            oList.WriteAllLinesToTmp();
+        }
+
         #region Match audio id.
         public void MatchAudioId(string matchFilePath, HashSet<int> matchingIds)
         {
@@ -667,13 +729,14 @@ namespace OfflineAudioProcessingSystem
             var list = File.ReadAllLines(filePath);
             Sanity.Requires(list.Length % 2 == 0, "Line count is not even.");
             bool trimLastInterval = false;
+            double previousMax = -0;
             for(int i = 0; i < list.Length; i += 2)
             {
                 string s1 = list[i];
                 string s2 = list[i + 1];
                 try
                 {
-                    ValidateSentencePair(s1, s2, i, list.Length);
+                    previousMax= ValidateSentencePair(s1, s2, i, list.Length, previousMax);
                 }
                 catch(CommonException e)
                 {
@@ -689,10 +752,10 @@ namespace OfflineAudioProcessingSystem
             if (trimLastInterval)
                 File.WriteAllLines(filePath, list.Take(list.Length - 2));
         }
-        private void ValidateSentencePair(string s1, string s2, int i, int n)
+        private double ValidateSentencePair(string s1, string s2, int i, int n, double previousMax)
         {
-            Sanity.Requires(ValidLineReg.IsMatch(s1), "Line format error.");
-            Sanity.Requires(ValidLineReg.IsMatch(s2), "Line format error.");
+            Sanity.Requires(ValidLineReg.IsMatch(s1), $"Line format error.\t{s1}");
+            Sanity.Requires(ValidLineReg.IsMatch(s2), $"Line format error.\t{s2}");
             var match1 = ValidLineReg.Match(s1);
             var match2 = ValidLineReg.Match(s2);
 
@@ -710,15 +773,18 @@ namespace OfflineAudioProcessingSystem
             string timeStamp2 = match2.Groups[1].Value;
             Sanity.Requires(timeStamp1 == timeStamp2, $"Time stamp mismatch. {timeStamp1}");
             double xmin1 = double.Parse(timeStamp1.Split(' ')[0].TrimStart('['));
-            double xmax1 = double.Parse(timeStamp1.Split(' ')[1].TrimEnd(']'));
+            double xmax1 = double.Parse(timeStamp1.Split(' ')[1].TrimEnd(']'));            
             if (i == n - 2)
                 Sanity.Requires(xmax1 > xmin1, $"Time stamp error, in the end. {xmin1}", 1);
             else
                 Sanity.Requires(xmax1 > xmin1, $"Time stamp error. {xmin1}");
 
+            Sanity.Requires(xmin1-previousMax>=-0.3, $"Time stamp error, cross, {xmin1-previousMax:0.00} {xmin1:0.00}");
+
             string content1 = match1.Groups[3].Value;
             string content2 = match2.Groups[3].Value;
             Sanity.Requires(!string.IsNullOrWhiteSpace(content1) && !string.IsNullOrWhiteSpace(content2), $"Empty content. {timeStamp1}");
+            return xmax1;
         }
         #endregion
 
@@ -773,14 +839,14 @@ namespace OfflineAudioProcessingSystem
         }
 
         Regex OscarDdReg = new Regex("([a-zA-Z]{4,10})-([0-9]{5})-([0-9]{5})", RegexOptions.Compiled);
-
+        public Dictionary<string, string> FilePathMappingDict = new Dictionary<string, string>();
+        public Dictionary<string, string> OscarMappingDict = new Dictionary<string, string>();
         public IEnumerable<string> GetFilePathFromOscarId(IEnumerable<string> oscarIdSequence)
         {
-            var dict = GetTransMappingDict();
             return oscarIdSequence
                 .Select(x => ExtractOscarId(x))
                 .Select(x => string.Join("_", x.Dialect, x.SpeakerId, x.AudioId))
-                .Select(x => dict[x]);
+                .Select(x => FilePathMappingDict[x]);
         }
         public (string Dialect, string SpeakerId, string AudioId) ExtractOscarId(string oscarId)
         {
@@ -791,14 +857,32 @@ namespace OfflineAudioProcessingSystem
             string audioId = match.Groups[3].Value;
             return (dialect, speakerId, audioId);
         }
-
-        public Dictionary<string,string> GetTransMappingDict()
+        public string GetRealPathFromOscarId(string oscarId)
         {
-            return File.ReadLines(Constants.TRANS_MAPPING_PATH)
+            var r = ExtractOscarId(oscarId);
+            return FilePathMappingDict[string.Join("_", r.Dialect, r.SpeakerId, r.AudioId)];
+        }
+        public void GetTransFilePathMappingDict()
+        {
+            FilePathMappingDict= File.ReadLines(Constants.TRANS_MAPPING_PATH)
                 .Select(x => GetTransMappingInfo(x))
                 .ToDictionary(x => x.Key, x => x.Value);
         }
-
+        public void SetOscarMappingDict()
+        {
+            var list = File.ReadLines(@"F:\WorkFolder\Summary\20210324_FromOscar\mapping");
+            foreach(string s in list)
+            {
+                int i = s.IndexOf(' ');
+                string oscarId = s.Substring(0, i);
+                var r = ExtractOscarId(oscarId);
+                string key = string.Join("_", r.Dialect, r.SpeakerId, r.AudioId);
+                string realPath = FilePathMappingDict[key];
+                string timeStamp = s.Substring(i + 1);
+                
+                OscarMappingDict.Add(oscarId, $"{realPath}\t{timeStamp}");
+            }
+        }
         private (string Key, string Value) GetTransMappingInfo(string s)
         {
             var split = s.Split('\t');

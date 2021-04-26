@@ -13,7 +13,10 @@ namespace Common
         {
             return new T[] { t };
         }
-
+        public static void GoThrough<T> (this IEnumerable<T> seq)
+        {
+            foreach (T _ in seq) ;
+        }
         public static IEnumerable<T> Concat<T>(this T t, IEnumerable<T> tSequence)
         {
             return t.ToSequence().Concat(tSequence);
@@ -35,6 +38,16 @@ namespace Common
                 array[j] = t;
             }
             return array;
+        }
+
+        public static T ArgMax<T>(Func<T,T,bool> maxComparer, params T[] seq)
+        {
+            return seq.ArgMax(maxComparer);
+        }
+
+        public static T ArgMax<T>(this IEnumerable<T> seq, Func<T, T, bool> maxComparer)
+        {
+            return seq.Aggregate((x, y) => maxComparer(x, y) ? x : y);
         }
     }
 }

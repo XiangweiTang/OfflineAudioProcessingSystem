@@ -92,6 +92,7 @@
     <Compile Include="KMeans.cs" />
     <Compile Include="Line.cs" />
     <Compile Include="Logger.cs" />
+    <Compile Include="MinimumEditDistance.cs" />
     <Compile Include="RunFile.cs" />
     <Compile Include="Sanity.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

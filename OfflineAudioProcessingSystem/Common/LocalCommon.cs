@@ -16,10 +16,22 @@ namespace OfflineAudioProcessingSystem
         public static string VadScriptPath { get; set; }
         public static string PythonPath { get; set; }
         private static HashSet<(string, string)> LocaleRegStringSet = new HashSet<(string, string)>();
+        public static Dictionary<string, PathMappingLine> DeliveredWavDict = new Dictionary<string, PathMappingLine>();
+        public static Dictionary<string, PathMappingLine> DeliveredTxtDict = new Dictionary<string, PathMappingLine>();
         static LocalCommon()
         {
             LocaleRegStringSet = IO.ReadEmbed("OfflineAudioProcessingSystem.Internal.Data.LocaleRegexMapping.txt", "OfflineAudioProcessingSystem")
                 .Select(x => (x.Split('\t')[0], x.Split('\t')[1])).ToHashSet();
+            SetDict();
+        }
+        private static void SetDict()
+        {
+            foreach(string s in File.ReadLines(@"F:\WorkFolder\Summary\20210222\Important\TransMapping.txt"))
+            {
+                var line = new PathMappingLine(s);
+                DeliveredTxtDict.Add(line.NewTextPath.ToLower(), line);
+                DeliveredWavDict.Add(line.NewWavePath.ToLower(), line);
+            }
         }
         public static void RunFfmpeg(string arguments)
         {
@@ -31,7 +43,7 @@ namespace OfflineAudioProcessingSystem
         }
         public static void CutAudioWithSox(string inputAudioPath, object startTime, object duration, string outputAudioPath)
         {
-            string arguments = $"{inputAudioPath} {outputAudioPath} trim {startTime} {duration}";
+            string arguments = $"{ inputAudioPath} {outputAudioPath} trim {startTime} {duration}";
             RunSox(arguments);
         }
         public static void MergeAudioWithFfmpeg(IEnumerable<string> inputAudioList, string outputAudioPath, string listPath)
@@ -176,6 +188,154 @@ namespace OfflineAudioProcessingSystem
             return s.Replace(",", "<comma>")
                 .Replace(".", "<fullstop>")
                 .Replace("?", "<questionmark>");
+        }
+
+        public static string GetAnnotationKey(string content)
+        {
+            string timeStamp = content.Split(']')[0].Trim('[');
+            string tag = Regex.Match(content, "<.*?>").Groups[0].Value;
+            return $"[{timeStamp}|{tag}";
+        }
+        public static IEnumerable<(double,double)> GetTotalCoverage(IEnumerable<(double, double)> intervals, double threshold=1)
+        {
+            var r = intervals.ToArray();
+            for (int i = 0; i < r.Length - 1; i++)
+            {
+                for (int j = i + 1; j < r.Length; j++)
+                {
+                    double diff= CompareIntervals(r[i], r[j]);
+                    if(diff>threshold)
+                    {
+                        yield return r[i];
+                        yield return r[j];
+                    }
+                }
+            }
+        }
+
+        private static double CompareIntervals((double, double) interval1, (double, double) interval2)
+        {
+            if (!IntervalValid(interval1))
+                return 0;
+            if (!IntervalValid(interval2))
+                return 0;
+            if (interval1.Item2 < interval2.Item1)
+                return 0;
+            if (interval1.Item1 > interval2.Item2)
+                return 0;
+            double left = Math.Max(interval1.Item1, interval2.Item1);
+            double right = Math.Min(interval1.Item2, interval2.Item2);
+            return right - left;
+        }
+
+        private static bool IntervalValid((double, double) interval)
+        {
+            return interval.Item2 >= interval.Item1;
+        }
+
+
+        public static Regex TransLineRegex = new Regex("\\[([\\-0-9.]+)\\s+([0-9.]+)]\\s*([sS][12])\\s*(<.*?>)(.*)(<.*?>)", RegexOptions.Compiled);
+        public static TransLine ExtractTransLine(string s)
+        {
+            Sanity.Requires(TransLineRegex.IsMatch(s));
+            var match = TransLineRegex.Match(s);
+            TransLine line = new TransLine
+            {
+                StartTimeString = match.Groups[1].Value,
+                EndTimeString = match.Groups[2].Value,
+                Speaker = match.Groups[3].Value.ToUpper(),
+                Prefix = match.Groups[4].Value,
+                Content = match.Groups[5].Value,
+                Suffix = match.Groups[6].Value
+            };
+            line.StartTime = double.Parse(line.StartTimeString);
+            line.EndTime = double.Parse(line.EndTimeString);
+            return line;
+        }
+
+        public static string OutputTransLine(this TransLine line)
+        {
+            return $"[{line.StartTimeString} {line.EndTimeString}] {line.Speaker} {line.Prefix}{line.Content}{line.Suffix}";
+        }
+        public static string GetTransLineKey(TransLine line)
+        {
+
+            return $"{GetPrefix(line.StartTimeString, 8)}|{GetPrefix(line.EndTimeString, 8)}|{line.Prefix}";
+        }
+        public static string GetPrefix(string s, int n)
+        {
+            n = Math.Min(n, s.Length);
+            return s.Substring(0, n);
+        }
+        public static void ModifyFileWithUpdate(string filePath, IEnumerable<TransLine> updates, bool updateFlag = false)
+        {
+            if (!File.Exists(filePath))
+            {
+                Console.WriteLine(filePath);
+                return;
+            }
+            var dict = File.ReadLines(filePath)
+                .Select(x => ExtractTransLine(x))
+                .ToDictionary(x => GetTransLineKey(x), x => x);
+            int i = dict.Count;
+            foreach(var update in updates)
+            {
+                string key = GetTransLineKey(update);
+                Sanity.Requires(dict.ContainsKey(key));
+                //else
+                dict[GetTransLineKey(update)] = update;
+            }
+            Sanity.Requires(dict.Count == i);
+            if(updateFlag)
+            {
+                var list = dict.Select(x => OutputTransLine(x.Value));
+                File.WriteAllLines(filePath, list);
+            }
+        }
+        public static string GetFilePathFromUpdate(string[] split)
+        {
+            string taskFolderName;
+            if (split[0].ToLower().EndsWith("offline"))
+                taskFolderName = split[1];
+            else
+                taskFolderName = $"{split[3]}_{split[1]}";
+
+            string textName = split[2].Contains(".wav")
+                ? split[2].Substring(0, split[2].Length - 4) + ".txt"
+                : split[2] + ".txt";
+            return Path.Combine(Constants.ANNOTATION_ROOT_PATH, split[0], "Input", taskFolderName, "Speaker", textName);
+        }
+        public static string GetFilePathFromUpdate(string s)
+        {
+            var split = s.Split('\t');
+            return GetFilePathFromUpdate(split);
+        }
+
+        public static IEnumerable<string> GetOnlineFolders()
+        {
+            return Directory.EnumerateDirectories(@"F:\WorkFolder\Transcripts", "*online");
+        }
+        public static IEnumerable<string> GetOfflineFolder()
+        {
+            return Directory.EnumerateDirectories(@"F:\WorkFolder\Transcripts", "*offline");
+        }
+        public static readonly Regex SpaceReg = new Regex("\\s+", RegexOptions.Compiled);
+        public static string CleanupSpace(this string s)
+        {
+            return SpaceReg.Replace(s, " ").Trim();
+        }
+        public static Dictionary<string,string> ReadToDict(string path)
+        {
+            Dictionary<string, string> dict = new Dictionary<string, string>();
+            foreach (string s in File.ReadLines(path))
+                dict.Add(s.Split('\t')[0], s.Split('\t')[1]);
+            return dict;
+        }
+        public static Dictionary<string,HashSet<string>> ReadToMDict(string path)
+        {
+            return File.ReadLines(path)
+                .GroupBy(x => x.Split('\t')[0])
+                .ToDictionary(x => x.Key, x => x.Select(y => y.Split('\t')[1]).ToHashSet());
         }
     }
 }

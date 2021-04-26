@@ -3,3 +3,12 @@
 <comma >	<comma>
 <FILL/ >	<FILL/>
 <FILL>	<FILL/>
+<CNOISE>	<CNOISE/>
+<comma/>	<comma>
+<fullstop/>	<fullstop>
+<questionmark/>	<questionmark>
+<unknown>	<UNKNOWN/>
+<question_mark/>	<questionmark>
+<fill/>	<FILL/>
+<cnoise>	<CNOISE/>
+<exclamation_mark/>	<fullstop>

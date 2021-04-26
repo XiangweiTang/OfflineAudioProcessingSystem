@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Common;
+using System.IO;
 
 namespace OfflineAudioProcessingSystem
 {
@@ -194,7 +195,7 @@ namespace OfflineAudioProcessingSystem
         }
     }
 
-    class FullMappingLine : Line
+    public class FullMappingLine : Line
     {
         public int AudioPlatformId { get; set; }
         public string OldPath { get; set; }
@@ -324,6 +325,89 @@ namespace OfflineAudioProcessingSystem
             TaskStatus = split[2];
             AudioPlatformId = int.Parse(split[3]);
             AudioName = split[4];
+        }
+    }
+
+    public class PathMappingLine : Line
+    {
+        public string OldTextPath { get; set; }
+        public string OldWavePath { get; set; }
+        public string NewTextPath { get; set; }
+        public string NewWavePath { get; set; }
+        public PathMappingLine(string s) : base(s) { }
+        protected override IEnumerable<object> GetLine()
+        {
+            yield return OldTextPath;
+            yield return OldWavePath;
+            yield return NewTextPath;
+            yield return NewWavePath;
+        }
+
+        protected override void SetLine(string[] split)
+        {
+            OldTextPath = split[0];
+            OldWavePath = split[1];
+            NewTextPath = split[2];
+            NewWavePath = split[3];
+        }
+    }
+
+
+    public class TotalMappingLine : Line
+    {
+        public string TaskName { get; set; }
+        public int TaskId { get; set; }
+        public string AudioName { get; set; }
+        public int AudioId { get; set; }
+        public string Dialect { get; set; }
+        public string SpeakerId { get; set; }
+        public int UniversalSpeakerId { get; set; }
+        public int UniversalFileId { get; set; }
+        public string InputTextPath { get; set; }
+        public string InputAudioPath { get; set; }
+        public string LocalAudioPath { get; set; }
+        public bool Online { get; set; }
+        public bool Valid { get; set; } = true;
+                
+        public string DeliveredTextPath { get; private set; }
+        public string DeliveredAudioPath { get; private set; }        
+        public TotalMappingLine(string s) : base(s) { }
+        public TotalMappingLine() : base() { }
+        protected override IEnumerable<object> GetLine()
+        {
+            yield return TaskId;
+            yield return TaskName;
+            yield return AudioId;
+            yield return AudioName;
+            yield return Dialect;
+            yield return SpeakerId;
+            yield return UniversalSpeakerId.ToString("00000");
+            yield return UniversalFileId.ToString("00000");
+            yield return InputTextPath;
+            yield return InputAudioPath;
+            yield return LocalAudioPath;
+            yield return Online;
+            yield return Valid;
+        }
+
+        protected override void SetLine(string[] split)
+        {
+            TaskId = int.Parse(split[0]);
+            TaskName = split[1];
+            AudioId = int.Parse(split[2]);
+            AudioName = split[3];
+            Dialect = split[4].ToLower();
+            SpeakerId = split[5];
+            UniversalSpeakerId = int.Parse(split[6]);
+            UniversalFileId = int.Parse(split[7]);
+            InputTextPath = split[8].ToLower();
+            InputAudioPath = split[9].ToLower();
+            LocalAudioPath = split[10].ToLower();
+            Online = bool.Parse(split[11]);
+            Valid = bool.Parse(split[12]);
+
+            DeliveredTextPath = Path.Combine(@"F:\WorkFolder\300hrsAnnotationNew", Dialect, UniversalSpeakerId.ToString("00000"), UniversalFileId.ToString("00000") + ".txt").ToLower();
+            DeliveredAudioPath = Path.Combine(@"F:\WorkFolder\300hrsRecordingNew", Dialect, UniversalSpeakerId.ToString("00000"), UniversalFileId.ToString("00000") + ".wav").ToLower();            
         }
     }
 }

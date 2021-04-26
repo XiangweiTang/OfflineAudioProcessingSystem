@@ -20,6 +20,7 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
         public string MissingPath { get; set; } = "";
         public string AudioTimePath { get; set; } = "";
         public string InputAudioTimePath { get; set; } = "";
+        public double WordCountMismatchThreshold { get; set; } = 1.3;
         const int MAX_SHOW_COUNT = 50;
         List<string> FullList = new List<string>();
         //List<string> PostCheckList = new List<string>();
@@ -29,8 +30,6 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
         }
         public void Test()
         {
-            string s = "[5 9.75]S1 <chdialects-converted> Guten Tag <comma> ist <UNKNOWN> Ihr Vater <questionmark><chdialects-converted> ";
-            //var r = ExtractLine(s, 0);
         }
         public void RunValidation(string specificPath="",bool ignoreDialectTag=false)
         {
@@ -140,7 +139,7 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                         var list = ValidateFile(textPath);
                         if (list != null && list.Count > 0)
                         {
-                            var outputList = list.Select(x => OutputTransLine(x));
+                            var outputList = list.Select(x =>LocalCommon.OutputTransLine(x));
                             string fileName;
                             if (speakerId == "")
                             {
@@ -208,7 +207,7 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                         if (list != null && list.Count > 0&&list.Count==File.ReadLines(textPath).Count())
                         {
                             string fileName = textPath.Split('\\').Last();
-                            var outputList = list.Select(x => OutputTransLine(x));
+                            var outputList = list.Select(x =>LocalCommon.OutputTransLine(x));
                             string outputTextPath = Path.Combine(outputSpeakerPath, fileName);
                             File.WriteAllLines(outputTextPath, outputList);
                             ValidateFileAll(outputTextPath);
@@ -471,6 +470,7 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
         private bool ValidateTransLineList(List<TransLine> list, string filePath, string taskNameContent)
         {
             int unkCount = 0;
+            bool valid = true;
             for(int i = 0; i < list.Count; i+=2)
             {
                 string so = "";
@@ -479,12 +479,13 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                 {
                     int u;
                     var oLine = list[i];
-                    so = OutputTransLine(oLine);
+                    so = LocalCommon.OutputTransLine(oLine);
                     var cLine = list[i + 1];
-                    sc = OutputTransLine(cLine);
-                    ValidateTransLinePair(oLine, cLine, out u);
-                    unkCount += u;
-                    
+                    sc = LocalCommon.OutputTransLine(cLine);
+                    var r = ValidateAndUpdateTransLinePair(oLine, cLine, out u);
+                    list[i] = r.oLine;
+                    list[i + 1] = r.cLine;
+                    unkCount += u;                    
                 }
                 catch(CommonException e)
                 {
@@ -492,42 +493,53 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                     string contentC = $"{filePath}\t{taskNameContent}\t{TransErrorArray[e.HResult]}\t{sc}";
                     FullList.Add(contentO);
                     FullList.Add(contentC);
-                    return false;
+                    valid = false;
                 }
             }
             try
             {
-                Sanity.Requires(unkCount <= 5, 19);
+                Sanity.Requires(unkCount <= 10, 19);
             }
             catch(CommonException e)
             {
                 string content = $"{filePath}\t{taskNameContent}\t{TransErrorArray[e.HResult]}\t";
                 FullList.Add(content);
-                return false;
+                valid = false;
             }
-            return true;
+            return valid;
         }
 
-        private void ValidateTransLinePair(TransLine oLine, TransLine cLine, out int unkCount)
+        private (TransLine oLine, TransLine cLine) ValidateAndUpdateTransLinePair(TransLine oLine, TransLine cLine, out int unkCount)
         {
             Sanity.Requires(oLine.StartTime == cLine.StartTime, 9);
             Sanity.Requires(oLine.EndTime == cLine.EndTime, 9);
             Sanity.Requires(oLine.StartTime < oLine.EndTime, 9);
 
-
-            var oTags = TagReg.Matches(oLine.Content).Cast<Match>().Select(x => x.Value).ToArray();
-            var cTags = TagReg.Matches(cLine.Content).Cast<Match>().Select(x => x.Value).ToArray();
-            Sanity.Requires(oTags.SequenceEqual(cTags), 17);
-
+            TokenMapping tm = new TokenMapping();
+            var r = tm.MappingTokens(oLine.Content, cLine.Content, 17);
+            oLine.Content = r.oContent;
+            cLine.Content = r.cContent;
             int oCount = oLine.Content.Split(' ').Length;
             int cCount = cLine.Content.Split(' ').Length;
 
-            Sanity.Requires(oCount * 1.3 >= cCount || oCount + 1 >= cCount, 18);
-            Sanity.Requires(cCount * 1.3 >= oCount || cCount + 1 >= oCount, 18);
+            Sanity.Requires(oCount * WordCountMismatchThreshold >= cCount || oCount + 5 >= cCount, 18);
+            Sanity.Requires(cCount * WordCountMismatchThreshold >= oCount || cCount + 5 >= oCount, 18);
 
 
-            unkCount = oTags.Where(x => x == "<UNKNOWN/>").Count();
+            unkCount = oLine.Content.Split(' ').Where(x => x == "<UNKNOWN/>").Count();
+            return (oLine, cLine);
         }
+
+        private void ReOrgTags(string[] oTags, string[] cTags)
+        {
+            MinimumEditDistance<string>.RunWithBackTrack(oTags, cTags);
+            var seq=MinimumEditDistance<string>.BackTrack("").ToArray();
+            var unique = MinimumEditDistance<string>.IsUnique;
+            Sanity.Requires(unique, 17);
+            var r = MinimumEditDistance<string>.FinalCell;
+            Sanity.Requires(r.Insert == 0 || r.Delete == 0, 17);
+        }
+
         private void OutputFile(string outputRootPath, string filePath, MappingLine mappingLine)
         {
             var list = ValidateFile(filePath);
@@ -539,7 +551,7 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
             string outputTextPath = Path.Combine(outputFolder,  name + ".txt");
             string outputWavPath = Path.Combine(outputFolder, name + ".wav");
 
-            var outputList = list.Select(x => OutputTransLine(x));
+            var outputList = list.Select(x => LocalCommon.OutputTransLine(x));
             File.Copy(inputWavePath, outputWavPath, true);
             File.WriteAllLines(outputTextPath, outputList);
         }        
@@ -559,7 +571,7 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
             Sanity.Requires(!string.IsNullOrWhiteSpace(line.Content), line.StartTime.ToString(), 16);
             return line;
         }
-
+        
         private TransLine SetTimeStamp(string s, TransLine line)
         {
             string subContent = s.Substring(0, Math.Min(MAX_SHOW_COUNT, s.Length));
@@ -570,10 +582,10 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
             Sanity.ReThrow(() =>
             {
                 string core = timeStampString.Substring(1, timeStampString.Length - 2);
-                string startString = core.Split(' ')[0];
-                string endString = core.Split(' ')[1];
-                double startTime = double.Parse(startString);
-                double endTime = double.Parse(endString);
+                line.StartTimeString = core.Split(' ')[0];
+                line.EndTimeString = core.Split(' ')[1];
+                double startTime = double.Parse(line.StartTimeString);
+                double endTime = double.Parse(line.EndTimeString);
                 line.StartTime = startTime;
                 line.EndTime = endTime;
             }, new CommonException(subContent, 3));
@@ -670,10 +682,6 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
             double maxTimeStamp = list.Max(x => x.EndTime);
 
             Sanity.Requires(maxTimeStamp >= 0 && (audioLength - maxTimeStamp <= 10 || audioLength / maxTimeStamp <= 2), wavePath, 6);
-        }
-        private string OutputTransLine(TransLine line)
-        {
-            return $"[{line.StartTime} {line.EndTime}] {line.Speaker} {line.Prefix} {line.Content} {line.Suffix}";
         }
 
         private void ValidateListPair(List<TransLine> list)
@@ -792,17 +800,113 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                 return "";
             }
         }
+
+        public void ModifyWithUpdateFile(string updateFilePath)
+        {
+            var groups = File.ReadLines(updateFilePath)
+                .Where(x=>x.Split('\t').Last()!="")
+                .GroupBy(x => x.Split('\t')[1]);
+            foreach(var group in groups)
+            {
+                string filePath = group.Key;
+                var updateDict = group.ToDictionary(x => x.Split('\t')[0], x => x.Split('\t').Last());
+                var iList = File.ReadLines(filePath).Select((x, y) => ExtractLine(x, y, false)).ToArray();
+                var olist = UpdateTransLinePairs(iList, updateDict)
+                    .Select(x => LocalCommon.OutputTransLine(x))
+                    .ToArray();
+                File.WriteAllLines(filePath, olist);
+            }
+        }
+
+        private string GetModifyFileKey(string s)
+        {
+            var split = s.Split('|');
+            return $"{split[3]}|{split[4]}";
+        }
+        private List<TransLine> UpdateTransLinePairs(IList<TransLine> list, Dictionary<string, string> updateDict)
+        {
+            List<TransLine> oList = new List<TransLine>();
+            for (int i = 0; i < list.Count; i++)
+            {
+                string key = $"[{list[i].StartTimeString} {list[i].EndTimeString}]|{list[i].Prefix}";
+                if (updateDict.ContainsKey(key))
+                {
+                    var line = list[i];
+                    string fullString = updateDict[key];
+                    TransLine newLine = ExtractLine(fullString, i, false);
+                    line.Content = newLine.Content;
+                    updateDict.Remove(key);
+                    oList.Add(line);
+                    string s1 = list[i].Content;
+                    string s2 = line.Content;
+                }
+                else
+                    oList.Add(list[i]);
+            }
+            Sanity.Requires(updateDict.Count == 0);
+            return oList;
+        }
+
+        private static char[] Sep = { ' ' };
+        #region MED validation
+        public void RunMedValidation()
+        {
+            string rootPath = @"F:\WorkFolder\300hrsAnnotationNew";
+            string listPath = @"F:\WorkFolder\MedFileList.txt";
+            string outputPath = @"F:\WorkFolder\MedResult.txt";
+            //PrepareMed(rootPath, listPath);
+            Console.WriteLine("Prepare is done.");
+            ArrangeMed(listPath, outputPath);
+        }
+        private void ArrangeMed(string listPath, string outputPath)
+        {
+            var r = File.ReadAllLines(listPath);
+            const int WIN_SIZE = 20;
+            Queue<string[]> window = new Queue<string[]>(WIN_SIZE);
+            List<string> outputList = new List<string>();
+            for (int i = 0; i < r.Length; i++)
+            {
+                string currentPath = r[i].Split('\t')[1];
+                if (window.Count >= WIN_SIZE)
+                    window.Dequeue();
+                var current = ExtractTokens(currentPath).ToArray();
+                window.Enqueue(current);
+                if (window.Count < WIN_SIZE)
+                    continue;
+                var pre = window.Take(WIN_SIZE - 1);
+                int currentIndex = i - WIN_SIZE + 1;
+                foreach (var tokens in pre)
+                {
+                    string tokensPath = r[currentIndex].Split('\t')[1];
+                    currentIndex++;
+                    if (current.Length >= tokens.Length * 1.1)
+                        continue;
+                    var med = MinimumEditDistance<string>.RunWithoutBackTrack(current, tokens);
+                    if (med.Same >= current.Length * 0.5)
+                        outputList.Add($"{med.Same}\t{current.Length}\t{currentPath}\t{tokensPath}");
+                }
+            }
+            File.WriteAllLines(outputPath, outputList);
+        }
+
+        private void PrepareMed(string rootPath, string listPath)
+        {
+            var list = Directory.EnumerateDirectories(rootPath).SelectMany(x => Directory.EnumerateFiles(x, "*.txt", SearchOption.AllDirectories))
+                .Select(x => new { Path = x, Length = ExtractTokens(x).Count() })
+                .OrderBy(x => x.Length)
+                .Select(x => $"{x.Length}\t{x.Path}");
+            File.WriteAllLines(listPath, list);
+        }
+        private IEnumerable<string> ExtractTokens(string filePath)
+        {
+            return File.ReadLines(filePath).Select((x, y) => ExtractLine(x, y))
+                .Where(x => x.Prefix == O_PREFIX)
+                .Select(x => Regex.Replace(x.Content, "<.*?>", " "))
+                .SelectMany(x => x.ToLower().Split(Sep, StringSplitOptions.RemoveEmptyEntries));
+        }
+        #endregion
     }  
 
-    struct TransLine
-    {
-        public double StartTime { get; set; }
-        public double EndTime { get; set; }
-        public string Prefix { get; set; }
-        public string Suffix { get; set; }
-        public string Speaker { get; set; }
-        public string Content { get; set; }
-    }
 
     class MappingLine : Line
     {

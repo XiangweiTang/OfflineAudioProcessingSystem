@@ -24,4 +24,15 @@ namespace Common
         protected abstract void SetLine(string[] split);
         protected abstract IEnumerable<object> GetLine();
     }
+    public struct TransLine
+    {
+        public double StartTime { get; set; }
+        public string StartTimeString { get; set; }
+        public double EndTime { get; set; }
+        public string EndTimeString { get; set; }
+        public string Prefix { get; set; }
+        public string Suffix { get; set; }
+        public string Speaker { get; set; }
+        public string Content { get; set; }
+    }
 }

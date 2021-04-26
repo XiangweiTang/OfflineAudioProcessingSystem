@@ -61,7 +61,7 @@ namespace Common
             string ext = fileName.Substring(i);
             return (rawName, ext);
         }
-        public static void WriteAllLinesToTmp(IEnumerable<string> list)
+        public static void WriteAllLinesToTmp(this IEnumerable<string> list)
         {
             File.WriteAllLines(GetCurrentTmpFile(), list);
         }
