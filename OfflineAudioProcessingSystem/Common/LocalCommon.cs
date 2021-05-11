@@ -11,6 +11,7 @@ namespace OfflineAudioProcessingSystem
 {
     public static class LocalCommon
     {
+        public static readonly char[] Sep = { ' ' };
         public static string SoxPath { get; set; }
         public static string FfmpegPath { get; set; }
         public static string VadScriptPath { get; set; }
@@ -75,6 +76,14 @@ namespace OfflineAudioProcessingSystem
         {
             // The python was from: https://github.com/wiseman/py-webrtcvad
             RunFile.RunPython(PythonPath, VadScriptPath, cutLevel.ToString(), inputAudioPath.WrapPath(), outputTimeStampFilePath.WrapPath());
+            List<string> list = new List<string>();
+            foreach(string s in File.ReadLines(outputTimeStampFilePath))
+            {
+                double startTime = Math.Round(double.Parse(s.Split('\t')[0]), 3);
+                double endTime = Math.Round(double.Parse(s.Split('\t')[1]), 3);
+                list.Add($"{startTime}\t{endTime}");
+            }
+            File.WriteAllLines(outputTimeStampFilePath, list);
         }
 
         public static bool BinaryIdentical(Stream fs1, int offset1, Stream fs2, int offset2)
@@ -255,7 +264,7 @@ namespace OfflineAudioProcessingSystem
 
         public static string OutputTransLine(this TransLine line)
         {
-            return $"[{line.StartTimeString} {line.EndTimeString}] {line.Speaker} {line.Prefix}{line.Content}{line.Suffix}";
+            return $"[{line.StartTimeString} {line.EndTimeString}] {line.Speaker} {line.Prefix} {line.Content} {line.Suffix}";
         }
         public static string GetTransLineKey(TransLine line)
         {
@@ -310,7 +319,22 @@ namespace OfflineAudioProcessingSystem
             var split = s.Split('\t');
             return GetFilePathFromUpdate(split);
         }
-
+        public static (int oCount, int cCount) TransWordCount(string path)
+        {
+            var list = File.ReadLines(path).Select(x => ExtractTransLine(x)).ToArray();
+            int oCount = 0;
+            int cCount = 0;
+            for(int i = 0; i < list.Length; i++)
+            {
+                int currentCount = list[i].Content.Split(Sep, StringSplitOptions.RemoveEmptyEntries)
+                    .Where(x => x[0] != '<').Count();
+                if (i % 2 == 0)
+                    oCount += currentCount;
+                else
+                    cCount += currentCount;
+            }
+            return (oCount, cCount);
+        }
         public static IEnumerable<string> GetOnlineFolders()
         {
             return Directory.EnumerateDirectories(@"F:\WorkFolder\Transcripts", "*online");

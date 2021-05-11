@@ -2,6 +2,7 @@
 <UNKNOWN>	<UNKNOWN/>
 <comma >	<comma>
 <FILL/ >	<FILL/>
+<FILL />	<FILL/>
 <FILL>	<FILL/>
 <CNOISE>	<CNOISE/>
 <comma/>	<comma>
@@ -11,4 +12,8 @@
 <question_mark/>	<questionmark>
 <fill/>	<FILL/>
 <cnoise>	<CNOISE/>
+<CHOISE/>	<CNOISE/>
 <exclamation_mark/>	<fullstop>
+<questoinmark>	<questionmark>
+<NOISE/>	<CNOISE/>
+<ullstop>	<fullstop>

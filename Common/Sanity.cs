@@ -19,6 +19,16 @@ namespace Common
             }
         }
 
+        public static void Throw(string message, int hResult=-1)
+        {
+            throw new CommonException(message, hResult);
+        }
+
+        public static void Throw(int hResult=-1)
+        {
+            throw new CommonException(hResult);
+        }
+
         public static void ReThrow(Action action, CommonException e)
         {
             try

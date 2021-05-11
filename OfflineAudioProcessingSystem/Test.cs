@@ -28,7 +28,12 @@ namespace OfflineAudioProcessingSystem
             //TestMed();
             //AddDialect(@"F:\WorkFolder\Transcripts\20210321_Online\Input\729_20201230_Luzern_Ruth\Speaker\Luzern Ruth0001 female 64.txt");        
             //RunTest();
+
+            //new ValidateAndUpdateFile(null,null).ValidateTimeStamp(@"F:\WorkFolder\Transcripts\20210422_Online\Input\814_20210318_Luzern_1\Speaker\Lucerne_0001_female_18_Sabirna.txt", "", "", "", "", "");
+            new OneOffSearchInputFiles().Run(true);
         }
+
+        
         private void TestMed()
         {
             var s = "a b b b".Split(' ');
@@ -149,15 +154,15 @@ namespace OfflineAudioProcessingSystem
         private void RunFullMapping()
         {
             FullMapping fm = new FullMapping();
-            fm.GetFilePathFromOscarId(File.ReadLines(@"F:\Tmp\TimestampIssue.txt")).WriteAllLinesToTmp();
+            //fm.GetFilePathFromOscarId(File.ReadLines(@"F:\Tmp\TimestampIssue.txt")).WriteAllLinesToTmp();
             /// Add new reocrding data, this will produce a new file in F:\Tmp folder.
             //fm.AddNewRecordingDataToMappingFile(@"F:\WorkFolder\Input\300hrsRecordingContent\20210310");
             //fm.AddOnlineInfo(@"F:\Tmp\part.txt", @"F:\WorkFolder\Summary\20210222\Important\OnlineStatus.txt");
 
             /// Create the mapping file for online and offline annotation data.
-            //fm.MappingOnlineData(@"F:\WorkFolder\Transcripts\20210321_Online");
-            //fm.ProduceOfflineFolderMapping(@"F:\WorkFolder\Transcripts\20210321_Offline");
-            //fm.MappingOffLineData(@"F:\WorkFolder\Transcripts\20210321_Offline");
+            //fm.MappingOnlineData(@"F:\WorkFolder\Transcripts\20210422_Online");
+            //fm.ProduceOfflineFolderMapping(@"F:\WorkFolder\Transcripts\20210329_Offline");
+            //fm.MappingOffLineData(@"F:\WorkFolder\Transcripts\20210422_Offline");
             //fm.MappingOutputDataAll();
 
             /// Create a file for new recording data.

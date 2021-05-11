@@ -69,5 +69,10 @@ namespace Common
         {
             return Path.Combine(@"f:\tmp", $"{DateTime.Now:yyyyMMddhhmmss}.txt");
         }
+        public static string GetFolder(string filePath)
+        {
+            FileInfo file = new FileInfo(filePath);
+            return file.Directory.FullName;
+        }
     }
 }

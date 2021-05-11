@@ -361,7 +361,7 @@ namespace OfflineAudioProcessingSystem
         public int AudioId { get; set; }
         public string Dialect { get; set; }
         public string SpeakerId { get; set; }
-        public int UniversalSpeakerId { get; set; }
+        public string UniversalSpeakerId { get; set; }
         public int UniversalFileId { get; set; }
         public string InputTextPath { get; set; }
         public string InputAudioPath { get; set; }
@@ -370,7 +370,9 @@ namespace OfflineAudioProcessingSystem
         public bool Valid { get; set; } = true;
                 
         public string DeliveredTextPath { get; private set; }
-        public string DeliveredAudioPath { get; private set; }        
+        public string DeliveredTextFolder { get; private set; }
+        public string DeliveredAudioPath { get; private set; } 
+        public string DeliveredAudioFolder { get; private set; }
         public TotalMappingLine(string s) : base(s) { }
         public TotalMappingLine() : base() { }
         protected override IEnumerable<object> GetLine()
@@ -381,7 +383,7 @@ namespace OfflineAudioProcessingSystem
             yield return AudioName;
             yield return Dialect;
             yield return SpeakerId;
-            yield return UniversalSpeakerId.ToString("00000");
+            yield return UniversalSpeakerId;
             yield return UniversalFileId.ToString("00000");
             yield return InputTextPath;
             yield return InputAudioPath;
@@ -398,7 +400,7 @@ namespace OfflineAudioProcessingSystem
             AudioName = split[3];
             Dialect = split[4].ToLower();
             SpeakerId = split[5];
-            UniversalSpeakerId = int.Parse(split[6]);
+            UniversalSpeakerId = split[6].Contains('_') ? split[6] : int.Parse(split[6]).ToString("00000");
             UniversalFileId = int.Parse(split[7]);
             InputTextPath = split[8].ToLower();
             InputAudioPath = split[9].ToLower();
@@ -406,8 +408,12 @@ namespace OfflineAudioProcessingSystem
             Online = bool.Parse(split[11]);
             Valid = bool.Parse(split[12]);
 
-            DeliveredTextPath = Path.Combine(@"F:\WorkFolder\300hrsAnnotationNew", Dialect, UniversalSpeakerId.ToString("00000"), UniversalFileId.ToString("00000") + ".txt").ToLower();
-            DeliveredAudioPath = Path.Combine(@"F:\WorkFolder\300hrsRecordingNew", Dialect, UniversalSpeakerId.ToString("00000"), UniversalFileId.ToString("00000") + ".wav").ToLower();            
+            DeliveredTextPath = Path.Combine(@"F:\WorkFolder\300hrsAnnotation", Dialect, UniversalSpeakerId, UniversalFileId.ToString("00000") + ".txt").ToLower();
+            DeliveredTextFolder = Path.Combine(@"F:\WorkFolder\300hrsAnnotation", Dialect, UniversalSpeakerId);
+            Sanity.Requires(DeliveredTextFolder.Split('\\').Length == 5);
+            DeliveredAudioPath = Path.Combine(@"F:\WorkFolder\300hrsRecording", Dialect, UniversalSpeakerId, UniversalFileId.ToString("00000") + ".wav").ToLower();
+            DeliveredAudioFolder = Path.Combine(@"F:\WorkFolder\300hrsRecording", Dialect, UniversalSpeakerId);
+            Sanity.Requires(DeliveredAudioFolder.Split('\\').Length == 5);
         }
     }
 }

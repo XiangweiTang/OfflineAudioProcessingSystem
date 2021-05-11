@@ -276,7 +276,7 @@ namespace OfflineAudioProcessingSystem
                     AudioId = line1 != null ?(line1.AudioId==""?int.MinValue: int.Parse(line1.AudioId) ): int.MinValue,
                     Dialect = line1 != null ? line1.Dialect : "",
                     SpeakerId = line1 != null ? line1.Speaker : "",
-                    UniversalSpeakerId = line2 != null ? line2.UniversalSpeakerId : int.MinValue,
+                    UniversalSpeakerId = line2 != null ? line2.UniversalSpeakerId.ToString("00000") : int.MinValue.ToString(),
                     UniversalFileId = line2 != null ? line2.UniversalAudioId : int.MinValue,
                     InputTextPath = "",
                     InputAudioPath = "",
@@ -385,7 +385,7 @@ namespace OfflineAudioProcessingSystem
                 if (!inputDict.ContainsKey(line.TaskId.ToString()))
                 {
                     valid = false;
-                    Console.WriteLine(line.TaskId);
+                    Console.WriteLine("Abort!\t" + line.TaskId);
                     continue;
                 }
                 string folderPath = inputDict[line.TaskId.ToString()];
@@ -393,7 +393,7 @@ namespace OfflineAudioProcessingSystem
                 if (!File.Exists(wavePath))
                 {
                     valid = false;
-                    Console.WriteLine(wavePath);
+                    Console.WriteLine("Abort!\t" + wavePath);
                     continue;
                 }
 
@@ -472,6 +472,171 @@ namespace OfflineAudioProcessingSystem
                 return candidates.Single(x => File.Exists(Path.Combine(x, fileName)));
             }
             throw new CommonException();
+        }
+    }
+
+    class OneOffAddSpeakerId
+    {
+        public void Map()
+        {
+            var total = File.ReadLines(@"F:\WorkFolder\Summary\20210425\TotalMapping.txt")
+                .Select(x => new TotalMappingLine(x)).OrderBy(x => x.LocalAudioPath).ToArray();
+            var ids = File.ReadLines(@"F:\WorkFolder\Summary\20210222\Important\Iddict.txt")
+                .Select(x => new IdDictLine(x))
+                .ToDictionary(x => x.MergedId, x => x);
+            var overall = File.ReadLines(@"F:\WorkFolder\Summary\20210222\Important\OverallMappingAll.txt")
+                .Select(x => new OverallMappingLine(x)).ToArray();
+
+        }
+
+        private IEnumerable<string> GroupByIdentical(string[] audioPaths)
+        {
+            List<List<string>> dupes = new List<List<string>>();
+            foreach(string audioPath in audioPaths)
+            {
+                bool set = false;
+                foreach(var dupe in dupes)
+                {
+                    string oldePath = dupe[0];
+                    if (LocalCommon.AudioIdenticalLocal(oldePath, audioPath))
+                    {
+                        dupe.Add(audioPath);
+                        set = true;
+                        break;
+                    }
+                }
+                if (!set)
+                    dupes.Add(new List<string> { audioPath });
+            }
+            int groupId = 0;
+            foreach(var dupe in dupes)
+            {
+                if (dupe.Count == 1)
+                    continue;
+                foreach (string s in dupe)
+                    yield return $"{groupId}\t{s}";
+                groupId++;
+            }
+        }
+    }
+
+    class OneOffSearchInputFiles
+    {
+        Dictionary<string, string> LocalAudioDict = new Dictionary<string, string>();
+        Dictionary<string, TotalMappingLine> TotalDict = new Dictionary<string, TotalMappingLine>();
+        public void Run(bool output=false)
+        {
+            SetDict();
+            SearchOnlineFile();
+            SearchOfflineFile();
+            if (output)
+                TotalDict.Values.Select(x => x.Output()).WriteAllLinesToTmp();
+        }
+
+        private void SetDict()
+        {
+            LocalAudioDict = File.ReadLines(Constants.OVERALL_MAPPING_PATH)
+                .Select(x => new OverallMappingLine(x))
+                .Where(x => x.AudioId.Length == 4)
+                .ToDictionary(x => x.AudioId, x => x.AudioPath.ToLower());
+            TotalDict = File.ReadLines(Constants.TOTAL_MAPPING_PATH)
+                .Select(x => new TotalMappingLine(x))
+                .ToDictionary(x => x.LocalAudioPath.ToLower(), x => x);
+        }
+
+        public void SearchOnlineFile()
+        {
+            foreach(string onlinePath in Directory.EnumerateDirectories(@"F:\WorkFolder\Transcripts","*online"))
+            {
+                SearchOnlineFile(onlinePath);
+            }
+        }
+        public void SearchOfflineFile()
+        {
+            foreach(string offlinePath in Directory.EnumerateDirectories(@"F:\WorkFolder\Transcripts", "*offline"))
+            {
+                SearchOfflineFile(offlinePath);
+            }
+        }
+        public void SearchOnlineFile(string onlinePath)
+        {
+            string inputPath = Path.Combine(onlinePath, "Input");
+            Dictionary<string, string> dict = Directory.EnumerateDirectories(inputPath)
+                .ToDictionary(x => x.Split('\\').Last().Split('_')[0], x => x);
+            string aPath = Path.Combine(onlinePath, "FromAnnotation.txt");
+            var list = File.ReadLines(aPath).Select(x => new AnnotationLine(x));
+            foreach(var line in list)
+            {
+                string folder = Path.Combine(dict[line.TaskId.ToString()], "Speaker");
+                string textPath = Path.Combine(folder, line.AudioName.Substring(0, line.AudioName.Length - 3) + "txt");
+                if (!File.Exists(textPath))
+                {
+                    Console.WriteLine(textPath);
+                    continue;
+                }
+                string audioId = line.AudioPlatformId.ToString();
+                string localAudioPath = LocalAudioDict[audioId];
+                if (!File.Exists(localAudioPath))
+                {
+                    Console.WriteLine(textPath.ToLower());
+                    Console.WriteLine(localAudioPath);
+                    Console.WriteLine();
+                }
+                ResetInput(localAudioPath, textPath);
+            }
+        }
+        public void SearchOfflineFile(string offlinePath)
+        {
+            string inputPath = Path.Combine(offlinePath, "Input");
+            string mPath = Path.Combine(offlinePath, "OutputFolderMapping.txt");
+            Dictionary<string, string> dict = File.ReadLines(mPath)
+                .ToDictionary(x => x.Split('\t')[0].Replace("Output", "Input"), x => x.Split('\t')[1]);
+            foreach(string taskPath in Directory.EnumerateDirectories(inputPath))
+            {
+                string speakerPath = Path.Combine(taskPath, "Speaker");
+                string localFolderPath = dict[taskPath];
+                foreach(string textPath in Directory.EnumerateFiles(speakerPath,"*.txt"))
+                {
+                    string textName = textPath.Split('\\').Last();
+                    string audioName = textName.Substring(0, textName.Length - 3) + "wav";
+                    string localAudioPath = Path.Combine(localFolderPath, audioName);
+                    if (!File.Exists(localAudioPath))
+                    {
+                        Console.WriteLine(textPath.ToLower());
+                        Console.WriteLine(localAudioPath);
+                        Console.WriteLine();
+                        continue;
+                    }
+                    ResetInput(localAudioPath, textPath);
+                }
+            }
+        }
+
+        private void ResetInput(string localAudioPath, string inputTextPath)
+        {
+            string path = localAudioPath.ToLower().Replace(@"d:\", @"f:\");
+            if (!TotalDict.ContainsKey(path))
+            {
+                path = path.Replace("20210321", "20210314");
+            }
+            var line = TotalDict[path];
+            if (line.InputTextPath == "")
+            {
+                TotalDict[path].InputTextPath = inputTextPath.ToLower();
+                return;
+            }
+            if (line.InputTextPath != inputTextPath.ToLower())
+            {
+                int i = line.InputTextPath.IndexOf("input");
+                string iSub = line.InputTextPath.Substring(i);
+                int j = inputTextPath.ToLower().IndexOf("input");
+                string jSub = inputTextPath.ToLower().Substring(j);
+                if (iSub == jSub)
+                    return;
+                Console.WriteLine(line.InputTextPath);
+                Console.WriteLine(inputTextPath);
+                Console.WriteLine();
+            }  
         }
     }
 }

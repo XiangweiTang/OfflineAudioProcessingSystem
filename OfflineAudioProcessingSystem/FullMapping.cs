@@ -150,11 +150,11 @@ namespace OfflineAudioProcessingSystem
 
         public void CreateMetaData()
         {
-            string wavMetaDataPath = @"f:\WorkFolder\300hrsRecordingNew\Recording.metadata.txt";
-            string textMetaDataPath = @"f:\WorkFolder\300hrsAnnotationNew\Annotation.metadata.txt";
+            string wavMetaDataPath = @"f:\WorkFolder\300hrsRecording\Recording.metadata.txt";
+            string textMetaDataPath = @"f:\WorkFolder\300hrsAnnotation\Annotation.metadata.txt";
             string mergedPath = @"f:\WorkFolder\Merged.metadata.txt";
-            CreateMetaData(@"f:\WorkFolder\300hrsRecordingNew", "*.wav", wavMetaDataPath);
-            CreateMetaData(@"f:\WorkFolder\300hrsAnnotationNew", "*.txt", textMetaDataPath);
+            CreateMetaData(@"f:\WorkFolder\300hrsRecording", "*.wav", wavMetaDataPath);
+            CreateMetaData(@"f:\WorkFolder\300hrsAnnotation", "*.txt", textMetaDataPath);
             MergeMetaData(wavMetaDataPath, textMetaDataPath, mergedPath);
         }
         private void CreateMetaData(string folderPath,string pattern, string outputPath)
@@ -222,15 +222,21 @@ namespace OfflineAudioProcessingSystem
             string uploadPath = @"F:\WorkFolder\SpeakerInfo.txt";
             var list = File.ReadLines(inputPath)
                 .Select(x => new IdDictLine(x))
-                .Select(x => $"{x.UniversalId}\t{x.MergedId.Split('_')[0]}\t{x.Gender}\t{x.Age}");
+                .OrderBy(x => x.UniversalId)
+                .Select(x => CreateSpeakerId(x));
             File.WriteAllLines(outputPath, list);
             File.Copy(outputPath, uploadPath, true);
+        }
+        private string CreateSpeakerId(IdDictLine line)
+        {
+            bool validated = !line.InternalId.StartsWith("unk");
+            return string.Join("\t", line.UniversalId, line.MergedId.Split('_')[0], line.Gender, line.Age, validated);
         }
         public void CalculateDeliverAudioInfo()
         {
             List<string> list = new List<string>();
             double total = 0;
-            foreach(string localePath in Directory.EnumerateDirectories(@"F:\WorkFolder\300hrsRecordingNew"))
+            foreach(string localePath in Directory.EnumerateDirectories(@"F:\WorkFolder\300hrsRecording"))
             {
                 string locale = localePath.Split('\\').Last();
                 double r = Directory.EnumerateFiles(localePath, "*.wav", SearchOption.AllDirectories)
@@ -244,7 +250,7 @@ namespace OfflineAudioProcessingSystem
                 list.Add($"{locale}\t{r:0.00}\t{r / 3600:0.00}");
             }
             list.Add($"Total\t{total:0.00}\t{total / 3600:0.00}");
-            File.WriteAllLines(@"F:\WorkFolder\300hrsRecordingNew\Report.txt", list);
+            File.WriteAllLines(@"F:\WorkFolder\300hrsRecording\Report.txt", list);
         }
         
         public void CalculateDeliverTextInfo()
@@ -307,7 +313,7 @@ namespace OfflineAudioProcessingSystem
             var taskIdNameDict = File.ReadLines(overallMappingPath)
                 .Select(x => new OverallMappingLine(x))
                 .Select(x => new { x.AudioFolder, x.TaskId })
-                .Where(x=>x.TaskId!="0"&&x.TaskId!=""&&x.TaskId!="627")
+                .Where(x=>x.TaskId!="0"&&x.TaskId!=""&&x.TaskId!="627"&&x.TaskId!="-1"&&x.TaskId!="-2")
                 .Distinct()
                 .ToDictionary(x => x.TaskId, x => x.AudioFolder.ToLower());
             List<string> outputList = new List<string>();
@@ -411,8 +417,8 @@ namespace OfflineAudioProcessingSystem
                     if (realDict.ContainsKey(key))
                     {
                         string realPath = realDict[key];
-                        if (realPath != "")
-                            Sanity.Requires(LocalCommon.AudioIdenticalLocal(realPath, audioPath));
+                        //if (realPath != "")
+                        //    Sanity.Requires(LocalCommon.AudioIdenticalLocal(realPath, audioPath));
                         s = $"{audioPath}\t{textPath}\t{realPath}\t{taskFolder}";
                     }
                     else

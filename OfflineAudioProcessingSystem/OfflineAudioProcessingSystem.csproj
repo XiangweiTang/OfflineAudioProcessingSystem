@@ -104,6 +104,7 @@
     <Compile Include="Common\LocalCommon.cs" />
     <Compile Include="Common\LocalConstants.cs" />
     <Compile Include="Features\TranscriptValidation\ConfigTranscriptValidation.cs" />
+    <Compile Include="Features\TranscriptValidation\IntervalCheck.cs" />
     <Compile Include="Features\TranscriptValidation\Mapping.cs" />
     <Compile Include="Features\TranscriptValidation\OneOffTasks.cs" />
     <Compile Include="Features\TranscriptValidation\TokenMapping.cs" />
