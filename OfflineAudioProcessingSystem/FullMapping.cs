@@ -150,8 +150,8 @@ namespace OfflineAudioProcessingSystem
 
         public void CreateMetaData()
         {
-            string wavMetaDataPath = @"f:\WorkFolder\300hrsRecording\Recording.metadata.txt";
-            string textMetaDataPath = @"f:\WorkFolder\300hrsAnnotation\Annotation.metadata.txt";
+            string wavMetaDataPath = @"f:\WorkFolder\Recording.metadata.txt";
+            string textMetaDataPath = @"f:\WorkFolder\Annotation.metadata.txt";
             string mergedPath = @"f:\WorkFolder\Merged.metadata.txt";
             CreateMetaData(@"f:\WorkFolder\300hrsRecording", "*.wav", wavMetaDataPath);
             CreateMetaData(@"f:\WorkFolder\300hrsAnnotation", "*.txt", textMetaDataPath);

@@ -17,3 +17,6 @@
 <questoinmark>	<questionmark>
 <NOISE/>	<CNOISE/>
 <ullstop>	<fullstop>
+<UNKOWN/>	<UNKNOWN/>
+</OVERLAP>	<OVERLAP/>
+<OVERSLAP/>	<OVERLAP/>

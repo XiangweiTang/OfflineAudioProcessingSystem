@@ -12,80 +12,135 @@ namespace OfflineAudioProcessingSystem
     class OneOffTasks
     {
         public OneOffTasks()
-        { MapNotDo(); }
-        private void GetTaskFolders()
+        { Copy(); }
+
+        public void Copy()
         {
-            List<string> oList1 = new List<string>();
-            List<string> oList2 = new List<string>();
-            foreach(string subFolderPath in Directory.EnumerateDirectories(@"F:\WorkFolder\Input\300hrsRecordingContent"))
+            foreach(string s in File.ReadLines(Constants.TOTAL_MAPPING_PATH))
             {
-                string folderName = subFolderPath.Split('\\').Last();
-                if (folderName.All(x => x <= '9' && x >= '0'))
+                var line = new TotalMappingLine(s);
+                if (!line.Valid)
+                    continue;
+                if (!File.Exists(line.DeliveredAudioPath))
                 {
-                    foreach(string dialectPath in Directory.EnumerateDirectories(subFolderPath))
-                    {
-                        foreach(string speakerIdPath in Directory.EnumerateDirectories(dialectPath))
-                        {
-                            string speakerId = speakerIdPath.Split('\\').Last();
-                            oList1.Add($"{speakerId}\t{speakerIdPath}");
-                        }
-                    }
-                }
-                else
-                {
-                    string locale = folderName;
-                    foreach(string taskFolder in Directory.EnumerateDirectories(subFolderPath))
-                    {
-                        string taskName = taskFolder.Split('\\').Last();
-                        oList2.Add($"{taskName}\t{taskFolder}");
-                    }
+                    if (!Directory.Exists(line.DeliveredAudioFolder))
+                        Directory.CreateDirectory(line.DeliveredAudioFolder);
+                    File.Copy(line.LocalAudioPath, line.DeliveredAudioPath);
                 }
             }
-            oList1.WriteAllLinesToTmp();
-            oList2.WriteAllLinesToTmp();
-        }
-
-        private void GetNotDo()
-        {
-            var annotated = File.ReadLines(@"F:\WorkFolder\Summary\20210222\OfflineTextgridWavPath.txt")
-                .Concat(File.ReadLines(@"F:\WorkFolder\Summary\20210222\OnlineWavWavPath.txt"))
-                .Select(x => x.Split('\t')[1].ToLower())
-                .ToHashSet();
-            var all = Directory.EnumerateFiles(@"F:\WorkFolder\Input\300hrsRecordingContent", "*.wav", SearchOption.AllDirectories)
-                .Select(x => x.ToLower()).ToHashSet();
-            var common = all.Intersect(annotated).ToArray();
-            var diff1 = all.Except(annotated).ToArray();
-            var diff2 = annotated.Except(all).ToArray();
-            diff1.WriteAllLinesToTmp();
-        }
-
-        private void MapNotDo()
-        {
-            string notDoPath = @"F:\WorkFolder\Summary\20210222\Unfinished_20210422.txt";
-            string overallMappingPath = @"F:\WorkFolder\Summary\20210222\Important\OverallMappingAll.txt";
-            var dict = File.ReadLines(notDoPath).ToDictionary(x => x, x => 0);
-            foreach(string s in File.ReadLines(overallMappingPath))
-            {
-                var line = new OverallMappingLine(s);
-                if (dict.ContainsKey(line.AudioPath.ToLower()))
-                    dict[line.AudioPath.ToLower()]++;
-            }
-
-            List<string> oList = new List<string>();
-            foreach(string s in File.ReadLines(overallMappingPath))
-            {
-                var line = new OverallMappingLine(s);
-                string key = line.AudioPath.ToLower();
-                if (dict.ContainsKey(key))
-                {
-                    oList.Add(string.Join("\t", line.AudioPath, line.Dialect, line.TaskId, line.AudioId,  line.TaskName, line.AudioName, dict[key]));
-                }
-            }
-
-            oList.WriteAllLinesToTmp();
         }
     }
 
+    class OneOffCutAudios
+    {
+        public void RunCut()
+        {
+            var list = CutAudios();
+            string rootPath = @"F:\WorkFolder\300hrsSplit";
+            List<string> o = new List<string>();
+            foreach(var line in list)
+            {
+                line.CutAudio(rootPath);
+                line.CutText(rootPath);
+                o.Add(line.Output());
+            }
+            o.WriteAllLinesToTmp();
+        }
+        private IEnumerable<CutAudioLine> CutAudios()
+        {
+            var list = File.ReadLines(Constants.TOTAL_MAPPING_PATH)
+                .Select(x => new TotalMappingLine(x));
+            int externalIndex = 0;
+            foreach(var l in list)
+            {
+                if (!File.Exists(l.DeliveredTextPath))
+                    continue;
+                var content = File.ReadLines(l.DeliveredTextPath)
+                    .Select(x => LocalCommon.ExtractTransLine(x))
+                    .ToArray();
+                Sanity.Requires(content.Length%2 == 0);
+                for(int i = 0; i < content.Length; i += 2)
+                {
+                    CutAudioLine line = new CutAudioLine
+                    {
+                        SourceAudioPath = l.DeliveredAudioPath,
+                        SourceTextPath = l.DeliveredTextPath,
+                        Dialect = l.Dialect,
+                        ExternalIndex = externalIndex,
+                        InternalIndex = i/2,
+                        StartTime = content[i].StartTime.ToString(),
+                        EndTime = content[i].EndTime.ToString(),
+                        SG = content[i].Content,
+                        HG = content[i + 1].Content
+                    };
+                    yield return line;
+                }
+                externalIndex++;
+            }
+        }
+    }
+    class CutAudioLine : Line
+    {
+        public string SourceAudioPath { get; set; }
+        public string SourceTextPath { get; set; }
+        public string Dialect { get; set; }
+        public int ExternalIndex { get; set; }
+        public int InternalIndex { get; set; }
+        public string StartTime { get; set; }
+        public string EndTime { get; set; }
+        public string SG { get; set; }
+        public string HG { get; set; }
+        public CutAudioLine() { }
+        public CutAudioLine(string s) : base(s) { }
+        protected override IEnumerable<object> GetLine()
+        {
+            yield return SourceAudioPath;
+            yield return SourceTextPath;
+            yield return Dialect;
+            yield return ExternalIndex;
+            yield return InternalIndex;
+            yield return StartTime;
+            yield return EndTime;
+            yield return SG;
+            yield return HG;
+        }
+
+        protected override void SetLine(string[] split)
+        {
+            SourceAudioPath = split[0];
+            SourceTextPath = split[1];
+            Dialect = split[2];
+            ExternalIndex = int.Parse(split[3]);
+            InternalIndex = int.Parse(split[4]);
+            StartTime = split[5];
+            EndTime = split[6];
+            SG = split[7];
+            HG = split[8];
+        }
+
+        public void CutAudio(string rootPath)
+        {
+            string outputFolder = Path.Combine(rootPath, Dialect, ExternalIndex.ToString());
+            Directory.CreateDirectory(outputFolder);
+            string outputPath = Path.Combine(outputFolder, InternalIndex + ".wav");
+            double timeSpan = double.Parse(EndTime) - double.Parse(StartTime);
+            LocalCommon.CutAudioWithSox(SourceAudioPath, StartTime, timeSpan, outputPath);
+        }
+        public void CutText(string rootPath)
+        {
+            string outputFolder = Path.Combine(rootPath, Dialect, ExternalIndex.ToString());
+            Directory.CreateDirectory(outputFolder);
+            string outputPath = Path.Combine(outputFolder, InternalIndex + ".txt");
+            List<string> list = new List<string>
+            {
+                "SG",
+                SG,
+                "HG",
+                HG
+            };
+            File.WriteAllLines(outputPath, list);
+        }
+    }
     class OneoffMappingFiles
     {
         public OneoffMappingFiles()

@@ -24,106 +24,141 @@ namespace OfflineAudioProcessingSystem
             //RunFullMapping();
             //RunTransValidation(@"F:\WorkFolder\Transcripts\20210329_Online", 1.5);
             //UpdateAll(@"F:\WorkFolder\Summary\Update\Update_20210422_ForPre.txt");
-            //RunAudioTrans(@"");
+            //RunAudioTrans(@"C:\Users\engcheck\Downloads\20210523");
             //TestMed();
             //AddDialect(@"F:\WorkFolder\Transcripts\20210321_Online\Input\729_20201230_Luzern_Ruth\Speaker\Luzern Ruth0001 female 64.txt");        
             //RunTest();
 
             //new ValidateAndUpdateFile(null,null).ValidateTimeStamp(@"F:\WorkFolder\Transcripts\20210422_Online\Input\814_20210318_Luzern_1\Speaker\Lucerne_0001_female_18_Sabirna.txt", "", "", "", "", "");
-            new OneOffSearchInputFiles().Run(true);
-        }
-
-        
-        private void TestMed()
-        {
-            var s = "a b b b".Split(' ');
-            var c = "a b b a b".Split(' ');
-            MinimumEditDistance<string>.RunWithBackTrack(s, c);
-            MinimumEditDistance<string>.BackTrack("").GoThrough();
-            var r = MinimumEditDistance<string>.IsUnique;
-        }
-
-        private void CompareReUpdate(IEnumerable<string> annotatorUpdates, IEnumerable<string> recheckResult)
-        {
-            var dict1 = CreateUpdateDict(annotatorUpdates);
-            var dict2 = CreateUpdateDict(recheckResult);
-            var common = dict1.Keys.Intersect(dict2.Keys);
-            foreach(string key in common)
+            //new ValidateAndUpdateFolder().ValidateAllFolders(true);
+            //new OneOffSearchInputFiles().Run(true);
+            //GroupBy();
+            //var list = BrowseFile(@"F:\WorkFolder\Summary\20210425\PostCheckError.txt");
+            //list.WriteAllLinesToTmp();
+            //new OneOffCutAudios().RunCut();
+            foreach(string s in Directory.EnumerateFiles(@"F:\WorkFolder\300hrsSplit", "*.wav", SearchOption.AllDirectories))
             {
-                if (dict1[key] == dict2[key])
-                {
-                    Console.WriteLine(dict1[key] + "\t" + key);
-                }
+                FileInfo file = new FileInfo(s);
+                if(file.Length<=400)
+                    Console.WriteLine(s);
             }
         }
 
-        private Dictionary<string,string> CreateUpdateDict(IEnumerable<string> seq)
+        private void GroupBy()
         {
-            Dictionary<string, string> dict = new Dictionary<string, string>();
+            List<string> list = new List<string>();
+            var groups = File.ReadLines(@"F:\Tmp\20210601060032.txt")
+                .GroupBy(x => string.Join("\t", x.Split('\t')[10], x.Split('\t')[11], x.Split('\t')[12]));
+            foreach(var g in groups)
+            {
+                string key = g.Key;
+                int r = 0;
+                int e = 0;
+
+                foreach(string s in g)
+                {
+                    var split = s.Split('\t');
+                    int sgr = int.Parse(split[6]);
+                    int sge = int.Parse(split[7]);
+                    int hgr = int.Parse(split[8]);
+                    int hge = int.Parse(split[9]);
+                    r += sgr + hgr;
+                    e += sge + hge;
+                }
+                double rate = (double)e / r;
+                list.Add($"{key}\t{r}\t{e}\t{rate}");
+            }
+            list.WriteAllLinesToTmp();
+        }
+        private IEnumerable<string> BrowseFile(string filePath)
+        {
+            var totalDict = File.ReadLines(@"F:\WorkFolder\Summary\20210425\TotalMapping.txt")
+                .Select(x => new TotalMappingLine(x))
+                .ToDictionary(x => x.DeliveredTextPath, x => x);
+            var postCheckDict = File.ReadLines(@"F:\WorkFolder\Summary\20210425\PostCheckMapping.txt")
+                .ToDictionary(x => x.Split('\\').Last() + ".wav", x => x.Split('\t')[0]);
+            int errorCount = 0;
+            int refCount = 0;
+            foreach(string s in File.ReadLines(filePath))
+            {
+                var split = s.ToLower().Split('\t');
+                string key = split[0];
+                string deliverdPath = postCheckDict[key];
+                var line = totalDict[deliverdPath];
+                string info;
+                if (line.Online)
+                {
+                    Sanity.Requires(line.TaskId > 100);
+                    info = line.Dialect + "\t" + line.TaskId + "\t" + line.AudioId + ".wav";
+                }
+                else
+                {
+                    info = line.Dialect + "\t" + line.SpeakerId + "\t" + line.AudioName;
+                }
+                string sgError = split[1];
+                string sgRef = split[4];
+                string hgError = split[2];
+                string hgRef = split[5];
+                var sgR = CalcError(sgError, sgRef);
+                var hgR = CalcError(hgError, hgRef);
+                errorCount += sgR.errorCount + hgR.errorCount;
+                refCount += sgR.totalCount + hgR.totalCount;
+                yield return string.Join("\t", s, sgR.totalCount, sgR.errorCount, hgR.totalCount, hgR.errorCount, info);
+            }
+        }
+        private (int errorCount, int totalCount) CalcError(string serror, string sref)
+        {
+            var seqError = serror.Split(Sep, StringSplitOptions.RemoveEmptyEntries);
+            var seqRef = sref.Split(Sep, StringSplitOptions.RemoveEmptyEntries);
+            if (seqRef.Length == 0)
+            {
+                return (0, seqError.Length);
+            }
+            var r = MinimumEditDistance<string>.RunWithoutBackTrack(seqRef, seqError);
+            int errorCount = r.Delete + r.Substitution + r.Insert;
+            int totalCount = seqRef.Length;
+            return (errorCount, totalCount);
+        }
+
+        private IEnumerable<string> Filter(IEnumerable<string> seq)
+        {
+            double total = 2 * 60 * 60;
+            double current = 0;
             foreach(string s in seq)
             {
                 var split = s.Split('\t');
-                if (split[5] == "Too many UNK")
-                    continue;
-                string key = GetUniversalKey(split);
-                string value = split[5];
-                dict.Add(key, value);
+                double start = double.Parse(split[3]);
+                double end = double.Parse(split[4]);
+                double d = end - start;
+                current += d;
+                yield return s;
+                if (current > total)
+                    break;
             }
-            return dict;
         }
 
-        private string GetUniversalKey(string[] split)
+        private IEnumerable<string> GetList()
         {
-            return $"{LocalCommon.GetFilePathFromUpdate(split)}|{LocalCommon.GetTransLineKey(LocalCommon.ExtractTransLine(split.Last()))}".ToLower();
-        }
-        private void UpdateAll(string modifiedPath)
-        {
-            var groups = File.ReadLines(modifiedPath)
-                .Where(x=>x.Split('\t')[5]!= "Too many UNK")
-                .GroupBy(x => LocalCommon.GetFilePathFromUpdate(x));
-            foreach(var group in groups)
+            var list = File.ReadLines(Constants.TOTAL_MAPPING_PATH)
+                .Select(x => new TotalMappingLine(x));
+            foreach (var line in list)
             {
-                string filePath = group.Key;
-                var list = group.Select(x => LocalCommon.ExtractTransLine(x.Split('\t').Last()));
-                LocalCommon.ModifyFileWithUpdate(filePath, list, true);
-            }
-        }
-        
-        char[] Sep = { '\\' };
-        private void MergeReport()
-        {
-            List<string> outputList = new List<string>();
-            foreach(string offlinePath in Directory.EnumerateDirectories(Constants.ANNOTATION_ROOT_PATH, " * offline"))
-            {
-                string batchName = offlinePath.Split('\\').Last();
-                string allPath = Path.Combine(offlinePath, "All.txt");
-                outputList.AddRange(File.ReadLines(allPath).Select(x => $"{batchName}\t{x}"));
-            }
-            foreach(string onlinePath in Directory.EnumerateDirectories(Constants.ANNOTATION_ROOT_PATH, "*online"))
-            {
-                string batchName = onlinePath.Split('\\').Last();
-                string allPath = Path.Combine(onlinePath, "AllFilter.txt");
-                outputList.AddRange(File.ReadLines(allPath).Select(x => $"{batchName}\t{x}"));
-            }
-            IO.WriteAllLinesToTmp(outputList);
-        }
-        private void VerifyDF()
-        {
-            string rootPath = @"F:\WorkFolder\Transcripts";
-            foreach(string offlinePath in Directory.EnumerateDirectories(rootPath, "*offline"))
-            {
-                string mappingPath = Path.Combine(offlinePath, "OutputMapping.txt");
-                var list = File.ReadAllLines(mappingPath);
-                List<string> outputList = new List<string>();
-                foreach(string s in list)
+                if (line.InputTextPath.Contains("Team1"))
+                    continue;
+                if (File.Exists(line.DeliveredTextPath))
                 {
-                    string newS = s.Replace("f:\\", "F:\\");
-                    outputList.Add(newS);
+                    var r = File.ReadAllLines(line.DeliveredTextPath);
+                    for (int i = 0; i < r.Length; i += 2)
+                    {                        
+                        var tLine = LocalCommon.ExtractTransLine(r[i]);
+                        string c = LocalCommon.ExtractTransLine(r[i + 1]).Content;
+                        yield return $"{line.DeliveredTextPath}\t{line.DeliveredAudioPath}\t{line.Dialect}\t{tLine.StartTime}\t{tLine.EndTime}\t{tLine.Content}\t{c}";
+                    }
                 }
-                Sanity.Requires(list.Length == outputList.Count);
-                File.WriteAllLines(mappingPath, outputList);
             }
         }
+
+        char[] Sep = { ' ' };
 
         private void RunTest()
         {
@@ -149,7 +184,7 @@ namespace OfflineAudioProcessingSystem
 
             //RunTransTest();
 
-            RenameOfflineFolder(@"F:\WorkFolder\Transcripts\20210422_Offline\TextGrid");
+            //RenameOfflineFolder(@"F:\WorkFolder\Transcripts\20210422_Offline\TextGrid");
         }
         private void RunFullMapping()
         {
@@ -185,7 +220,7 @@ namespace OfflineAudioProcessingSystem
             //fm.CalculateAudioHours(@"F:\WorkFolder\Input\300hrsRecordingContent\20210324", @"F:\WorkFolder\Input\300hrsRecordingContent\20210326", @"F:\WorkFolder\Input\300hrsRecordingContent\20210329");
 
             /// Create speaker info file.
-            //fm.CreateSpeakerInfoFile();
+            //fm.CreateSpeakerInfoFile();           
 
             //fm.OutputRecordingStatusByTeam();
             //fm.OutputRecordingStatusByGenderLocale();

@@ -49,5 +49,31 @@ namespace Common
         {
             return seq.Aggregate((x, y) => maxComparer(x, y) ? x : y);
         }
+        static Random RAND = new Random();
+        public static T[] RandomSample<T>(this IEnumerable<T> seq, int n)
+        {
+            T[] result = new T[n];
+            int k = 0;
+            foreach (T t in seq)
+            {
+                if (k < n)
+                {
+                    result[k] = t;
+                }
+                else
+                {
+                    int j = RAND.Next(k);
+                    if (j < n)
+                        result[j] = t;
+                }
+                k++;
+            }
+
+            if (k < n)
+                return result.Take(k).ToArray();
+            else
+                return result;
+        }
+
     }
 }

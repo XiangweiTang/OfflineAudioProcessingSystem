@@ -217,6 +217,11 @@ namespace OfflineAudioProcessingSystem
         public static void TimeStampToTextGrid(string timeStampPath, string textGridPath)
         {
             var array = File.ReadAllLines(timeStampPath);
+            TimeStampToTextGrid(array, textGridPath);
+        }
+
+        public static void TimeStampToTextGrid(string[] array, string textGridPath)
+        {
             List<string> list = new List<string>();
             list.Add(SetTextGridHeader(array));
             list.Add(SetTextGridItemHeader(array, 1));

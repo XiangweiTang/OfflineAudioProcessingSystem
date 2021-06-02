@@ -213,22 +213,23 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
         {
             foreach (var pair in ReplaceArray)
                 s = s.Replace(pair.WrongTag, pair.CorrectTag);
-            s=s
-                .Replace("s1","")
-                .Replace("S1","")
-                .Replace("S2","")
-                .Replace("s2","")
-                .Replace("?", "<questionmark>")
-                .Replace(":", "<comma>")
-                .Replace(",", "<comma>")
-                .Replace(";", "<comma>")
-                .Replace(".", "<fullstop>")
-                .Replace("，", "<comma>")
-                .Replace("。", "<fullstop>")
+            s = s
+                .Replace("s1", " ")
+                .Replace("S1", " ")
+                .Replace("S2", " ")
+                .Replace("s2", " ")
+                .Replace((char)65311, '?')
+                .Replace("?", " <questionmark> ")
+                .Replace(":", " ")
+                .Replace(",", " <comma> ")
+                .Replace(";", " <comma> ")
+                .Replace(".", " <fullstop> ")
+                .Replace("，", " <comma> ")
+                .Replace("·", " <fullstop> ")
+                .Replace("。", " <fullstop> ")
                 .Replace('`', '\'')
                 .Replace("’", "'")
                 .Replace("´", "'")
-                .Replace("\"", " ")
                 .Replace('\u00BB', ' ')
                 .Replace('\u00AD', ' ')
                 .Replace('(', ' ')
@@ -238,18 +239,39 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                 .Replace(">>", ">")
                 .Replace(">", "> ")
                 .Replace("<", " <")
-                ;
+                .Replace((char)160, ' ')
+                .Replace((char)8222, ' ')
+                .Replace((char)8221, ' ')
+                .Replace((char)8220, ' ')
+                .Replace((char)8230, ' ')
+                .Replace('\u007f', ' ')
+                .Replace('\u001f', ' ')
+                .Replace('\u0010', ' ')
+                .Replace("&", " und ")
+                .Replace("€", " euro ")
+                .Replace("+", " plus ")
+                .Replace("@", " at ")
+                .Replace('#', ' ')
+                .Replace('%', ' ')
+                .Replace("!\\EXCLAMATION MARK", " !\\EXCLAMATION_MARK ")
+                .Replace("_\\Unterstrich", "_\\UNTERSTRICH");
+            ;
             if (!s.Contains("!\\"))
                 s = s.Replace("!", "<fullstop>");
+            if (!s.Contains("\"\\"))
+                s = s.Replace('"', ' ');
             string rawS = s;
             foreach (string validTag in ValidTagSet)
                 rawS = rawS.Replace(validTag, "");
             rawS = rawS
                 .Replace("-\\BINDESTRICH", "")
                 .Replace("!\\AUSRUFEZEICHEN", "")
-                .Replace("\"\\ANFÜHRUNGSZEICHEN", "");
-            
-            foreach(char c in rawS)
+                .Replace("\"\\ANFÜHRUNGSZEICHEN", "")
+                .Replace("!\\EXCLAMATION_MARK", "")
+                .Replace("_\\UNTERSTRICH", "");
+
+
+            foreach (char c in rawS)
             {
                 if (c >= 'A' && c <= 'Z')
                     continue;
@@ -400,12 +422,15 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
         Regex XMinReg = new Regex("^\\s*xmin\\s*=\\s*([0-9.\\-]+)\\s*$", RegexOptions.Compiled);
         Regex XMaxReg = new Regex("^\\s*xmax\\s*=\\s*([0-9.\\-]+)\\s*$", RegexOptions.Compiled);
         Regex TextReg = new Regex("^\\s*text\\s*=\\s*\"(.*)\"\\s*$", RegexOptions.Compiled);
+        Regex TwoSpReg = new Regex("[0-9]{5}_[0-9]{5}", RegexOptions.Compiled);
         public void ExtractTextGridFile(string textgridPath, bool overwrite=false)
         {
             string outputPath = textgridPath.Substring(0, textgridPath.Length - 8) + "txt";
             if (File.Exists(outputPath))
             {
-                return;
+                string fileName = textgridPath.Split('\\').Reverse().ElementAt(1);
+                if (!TwoSpReg.IsMatch(fileName))
+                    return;
             }
             try
             {
@@ -414,14 +439,25 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
                 var dict = PostVerifyTextgrid(intervalSeq);
                 if (dict.Count != 2)
                 {
-                    Console.WriteLine(textgridPath);
-                    return;
+                    if (dict.Count == 3 && dict.ContainsKey("SG") && dict.ContainsKey("HG") && dict.ContainsKey("SP"))
+                        ;
+                    else
+                    {
+                        Console.WriteLine(textgridPath);
+                        return;
+                    }
                 }
                 CheckIntervalsTwo(dict["SG"], dict["HG"]);
+                if (dict.ContainsKey("SP"))
+                    CheckIntervalsTwo(dict["SG"], dict["SP"]);
                 string sgPath = textgridPath + ".sg";
                 string hgPath = textgridPath + ".hg";
-                OutputSplitTextGrid(dict, sgPath, hgPath, overwrite);
-                MergeSgHg(sgPath, hgPath, outputPath);
+                string speakerPath = textgridPath + ".sp";
+                OutputSplitTextGrid(dict, sgPath, hgPath, speakerPath, overwrite);
+                if (!File.Exists(speakerPath))
+                    MergeSgHg(sgPath, hgPath, outputPath);
+                else
+                    MergeSgHgSp(sgPath, hgPath, speakerPath, outputPath);
             }
             catch(CommonException e)
             {
@@ -440,21 +476,48 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
             Sanity.Requires(sg.Length == hg.Length, "NO REPORT", 5);
             Sanity.Requires(sg.Length != 0, "NO REPORT", 6);
             List<string> list = new List<string>();
-            for(int i = 0; i < sg.Length; i++)
+            for (int i = 0; i < sg.Length; i++)
             {
                 list.Add(sg[i]);
                 list.Add(hg[i]);
             }
             File.WriteAllLines(outputPath, list);
         }
-        private void OutputSplitTextGrid(Dictionary<string, Interval[]> dict, string sgPath, string hgPath, bool overwrite = false)
+        private void MergeSgHgSp(string sgPath, string hgPath, string spPath, string outputPath)
+        {
+            if (!File.Exists(sgPath) || !File.Exists(hgPath) || !File.Exists(spPath))
+                return;
+            var sg = File.ReadAllLines(sgPath);
+            var hg = File.ReadAllLines(hgPath);
+            var sp = File.ReadAllLines(spPath);
+            Sanity.Requires(sg.Length == hg.Length && hg.Length == sp.Length, "NO REPORT", 5);
+            Sanity.Requires(sg.Length != 0, "NO REPORT", 6);
+            List<string> list = new List<string>();
+            for(int i = 0; i < sg.Length; i++)
+            {
+                var sgLine = LocalCommon.ExtractTransLine(sg[i]);
+                var hgLine = LocalCommon.ExtractTransLine(hg[i]);
+                var spLine = LocalCommon.ExtractTransLine(sp[i]);
+                sgLine.Speaker = $"S{spLine.Content.Trim()}";
+                hgLine.Speaker = $"S{spLine.Content.Trim()}";
+                list.Add(sgLine.OutputTransLine());
+                list.Add(hgLine.OutputTransLine());
+            }
+            File.WriteAllLines(outputPath, list);
+        }
+        private void OutputSplitTextGrid(Dictionary<string, Interval[]> dict, string sgPath, string hgPath, string speakerPath="", bool overwrite = false)
         {
             var sgList = dict["SG"].Where(x => !string.IsNullOrWhiteSpace(x.Text)).Select(x => GetTransLine(x, "SG").OutputTransLine());
             var hgList = dict["HG"].Where(x => !string.IsNullOrWhiteSpace(x.Text)).Select(x => GetTransLine(x, "HG").OutputTransLine());
+
+            var spList = dict.ContainsKey("SP") ? dict["SP"].Where(x => !string.IsNullOrWhiteSpace(x.Text)).Select(x => GetTransLine(x, "SP").OutputTransLine()) : null;
             if (overwrite || !File.Exists(sgPath))
                 File.WriteAllLines(sgPath, sgList);
             if (overwrite || !File.Exists(hgPath))
                 File.WriteAllLines(hgPath, hgList);
+            if (overwrite || !File.Exists(speakerPath))
+                if (spList != null)
+                    File.WriteAllLines(speakerPath, spList);
         }
         private TransLine GetTransLine(Interval interval, string name)
         {

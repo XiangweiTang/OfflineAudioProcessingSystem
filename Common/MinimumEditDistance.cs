@@ -8,7 +8,7 @@ namespace Common
 {
     public static class MinimumEditDistance<T> where T:IEquatable<T>
     {
-        public static Func<T, T, bool> Equal { get; set; } = null;
+        public static Func<T, T, bool> Equal { get; set; } = (T t1, T t2) => t1.Equals(t2);
         public static MedCell FinalCell { get; set; } = new MedCell { Delete = 0, Insert = 0, Substitution = 0, Same = 0 };
         private static int N = 0;
         private static MedCell[] ItorationArray = new MedCell[0];
