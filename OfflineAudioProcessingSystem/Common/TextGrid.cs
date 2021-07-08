@@ -220,14 +220,14 @@ namespace OfflineAudioProcessingSystem
             TimeStampToTextGrid(array, textGridPath);
         }
 
-        public static void TimeStampToTextGrid(string[] array, string textGridPath)
+        public static void TimeStampToTextGrid(string[] array, string textGridPath, string[] textArray1=null, string[] textArray2=null)
         {
             List<string> list = new List<string>();
             list.Add(SetTextGridHeader(array));
             list.Add(SetTextGridItemHeader(array, 1));
-            list.AddRange(SetTextGridBody(array));
+            list.AddRange(SetTextGridBody(array, textArray1));
             list.Add(SetTextGridItemHeader(array, 2));
-            list.AddRange(SetTextGridBody(array));
+            list.AddRange(SetTextGridBody(array, textArray2));
             File.WriteAllLines(textGridPath, list);
         }
 
@@ -254,7 +254,7 @@ namespace OfflineAudioProcessingSystem
             return string.Format(s, itemID, xmin, xmax, n,array[itemID-1]);            
         }
 
-        private static IEnumerable<string> SetTextGridBody(string[] timeStampArray)
+        private static IEnumerable<string> SetTextGridBody(string[] timeStampArray, string[] textArray=null)
         {
             string internalPath = "OfflineAudioProcessingSystem.Internal.Data.TextGridBody.txt";
             string s = IO.ReadEmbedAll(internalPath, "OfflineAudioProcessingSystem");
@@ -262,7 +262,8 @@ namespace OfflineAudioProcessingSystem
             {
                 string xmin = timeStampArray[i].Split('\t')[0];
                 string xmax = timeStampArray[i].Split('\t')[1];
-                yield return string.Format(s, i + 1, xmin, xmax);
+                string text = textArray == null ? "" : textArray[i];
+                yield return string.Format(s, i + 1, xmin, xmax, text);
             }
         }
     }

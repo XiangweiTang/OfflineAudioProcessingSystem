@@ -20,55 +20,93 @@ namespace OfflineAudioProcessingSystem
 
         public Test(string[] args)
         {
-            //RunTransTest();
-            //RunFullMapping();
-            //RunTransValidation(@"F:\WorkFolder\Transcripts\20210329_Online", 1.5);
-            //UpdateAll(@"F:\WorkFolder\Summary\Update\Update_20210422_ForPre.txt");
-            //RunAudioTrans(@"C:\Users\engcheck\Downloads\20210523");
-            //TestMed();
-            //AddDialect(@"F:\WorkFolder\Transcripts\20210321_Online\Input\729_20201230_Luzern_Ruth\Speaker\Luzern Ruth0001 female 64.txt");        
-            //RunTest();
-
-            //new ValidateAndUpdateFile(null,null).ValidateTimeStamp(@"F:\WorkFolder\Transcripts\20210422_Online\Input\814_20210318_Luzern_1\Speaker\Lucerne_0001_female_18_Sabirna.txt", "", "", "", "", "");
-            //new ValidateAndUpdateFolder().ValidateAllFolders(true);
-            //new OneOffSearchInputFiles().Run(true);
             //GroupBy();
             //var list = BrowseFile(@"F:\WorkFolder\Summary\20210425\PostCheckError.txt");
             //list.WriteAllLinesToTmp();
-            //new OneOffCutAudios().RunCut();
-            foreach(string s in Directory.EnumerateFiles(@"F:\WorkFolder\300hrsSplit", "*.wav", SearchOption.AllDirectories))
+            //new OneOffCutAudios().RunCut();            
+            //RedoTranscriptValidation.RunValidateTransfer.RunAll("update");
+            //RedoTranscriptValidation.RunValidateTransfer.RunValidationTransLine("20210619");
+            //GetMissingAgreement();
+            //OverallError();
+            //MergeOutput();
+            //CreateMetaData();
+            //OverallError();
+            string path = @"F:\WorkFolder\300hrsRecording";
+            int i = 0;
+            foreach(string locale in Directory.EnumerateDirectories(path))
             {
-                FileInfo file = new FileInfo(s);
-                if(file.Length<=400)
-                    Console.WriteLine(s);
+                foreach(string speaker in Directory.EnumerateDirectories(locale))
+                {
+                    string s = speaker.Split('\\').Last();
+                    if (s[0] == '1')
+                        i++;
+                }
             }
         }
 
-        private void GroupBy()
+        private void MergeOutput()
         {
-            List<string> list = new List<string>();
-            var groups = File.ReadLines(@"F:\Tmp\20210601060032.txt")
-                .GroupBy(x => string.Join("\t", x.Split('\t')[10], x.Split('\t')[11], x.Split('\t')[12]));
-            foreach(var g in groups)
+            string n = @"F:\WorkFolder\PostDelivery\Output\20210622";
+            string old = @"F:\WorkFolder\300hrsAnnotation";
+            string o= @"F:\WorkFolder\300hrsAnnotation_2ndRound";
+            foreach(string dialectPath in Directory.EnumerateDirectories(n))
             {
-                string key = g.Key;
-                int r = 0;
-                int e = 0;
-
-                foreach(string s in g)
+                string dialect = dialectPath.Split('\\').Last();
+                foreach(string speakerPath in Directory.EnumerateDirectories(dialectPath))
                 {
-                    var split = s.Split('\t');
-                    int sgr = int.Parse(split[6]);
-                    int sge = int.Parse(split[7]);
-                    int hgr = int.Parse(split[8]);
-                    int hge = int.Parse(split[9]);
-                    r += sgr + hgr;
-                    e += sge + hge;
+                    string speaker = speakerPath.Split('\\').Last();
+                    string outputFolder = Path.Combine(o, dialect, speaker);
+                    Directory.CreateDirectory(outputFolder);
+                    foreach(string filePath in Directory.EnumerateFiles(speakerPath))
+                    {
+                        string fileName = filePath.Split('\\').Last();
+                        string oldPath = Path.Combine(old, dialect, speaker, fileName);
+                        string outputPath = Path.Combine(outputFolder, fileName);
+                        MergeFiles(filePath, oldPath, outputPath);
+                    }
                 }
-                double rate = (double)e / r;
-                list.Add($"{key}\t{r}\t{e}\t{rate}");
             }
-            list.WriteAllLinesToTmp();
+        }
+        private void CreateMetaData()
+        {
+            Dictionary<string, double> dict = new Dictionary<string, double>();
+            int i = 0;
+            List<string> l = new List<string>();
+            foreach(string s in File.ReadLines(@"F:\WorkFolder\Merged.metadata.txt"))
+            {
+                var split = s.Split('\t');
+                string newPath = Path.Combine(@"F:\WorkFolder\300hrsAnnotation_2ndRound", split[0], split[1], split[2] + ".txt");
+                if (File.Exists(newPath))
+                {
+                    i++;
+                    string newS = string.Join("\t", split[0], split[1], split[2], split[3], split[4], split[4], split[5], split[6]);
+                    l.Add(newS);
+                    string audioPath = Path.Combine(@"F:\WorkFolder\300hrsRecording", split[3]);
+                    double t = (double)(new FileInfo(audioPath).Length) / 32000;
+                    string key = split[0];
+                    if (!dict.ContainsKey(key))
+                        dict[key] = 0;
+                    dict[key] += t;
+                }
+            }
+            var o = dict.OrderBy(x => x.Key).Select(x => $"{x.Key}\t{x.Value:0.00}\t{x.Value / 3600:0.00}");
+            Console.WriteLine(i);
+            File.WriteAllLines(@"F:\WorkFolder\Merged_2ndRound.metadata.txt", l);
+            File.WriteAllLines(@"F:\WorkFolder\Merged_2ndRound.audiohour.txt", o);
+        }
+        private void MergeFiles(string newFilePath, string oldFilePath, string outputPath)
+        {
+            string[] newContentArray = File.ReadAllLines(newFilePath);
+            string[] oldArray = File.ReadAllLines(oldFilePath);
+            Sanity.Requires(newContentArray.Length == oldArray.Length);
+            List<string> o = new List<string>();
+            for(int i = 0; i < oldArray.Length; i++)
+            {
+                var oldLine = LocalCommon.ExtractTransLine(oldArray[i]);
+                oldLine.Content = newContentArray[i];
+                o.Add(oldLine.OutputTransLine());
+            }
+            File.WriteAllLines(outputPath, o);
         }
         private IEnumerable<string> BrowseFile(string filePath)
         {
@@ -106,14 +144,47 @@ namespace OfflineAudioProcessingSystem
                 yield return string.Join("\t", s, sgR.totalCount, sgR.errorCount, hgR.totalCount, hgR.errorCount, info);
             }
         }
+
+        private void OverallError()
+        {
+            string path = @"F:\WorkFolder\PostDelivery\feedback.txt";
+            var list = File.ReadLines(path);
+            List<string> outputList = new List<string>();
+            foreach(string s in list)
+            {
+                var split = s.Split('\t');
+
+                string hg = BriefRevmoe(split[1]);
+                string hgError = BriefRevmoe(split[2]);
+                var hgR = CalcError(hgError, hg);
+                outputList.Add($"{s}\t{hgR.totalCount}\t{hgR.errorCount}");
+            }
+            outputList.WriteAllLinesToTmp();
+        }
+
+        private string BriefRevmoe(string s)
+        {
+            string noTimeStamp = Regex.Replace(s, "\\[.*]", "");
+            string noSpeaker = noTimeStamp.Replace("s1", "").Replace("S1", "");
+            string noDialects = noSpeaker
+                .Replace("<chdialects>","")
+                .Replace("<chdialects/>","")
+                .Replace("<chdialects-converted>","")
+                .Replace("<chdialects-converted/>","");
+            return noDialects == "segment deleted" ? "" : noDialects;
+        }
         private (int errorCount, int totalCount) CalcError(string serror, string sref)
         {
+            serror = Regex.Replace(serror, "<.*?>", " ");
+            sref = Regex.Replace(sref, "<.*?>", " ");
+
             var seqError = serror.Split(Sep, StringSplitOptions.RemoveEmptyEntries);
             var seqRef = sref.Split(Sep, StringSplitOptions.RemoveEmptyEntries);
             if (seqRef.Length == 0)
             {
                 return (0, seqError.Length);
-            }
+            }            
+
             var r = MinimumEditDistance<string>.RunWithoutBackTrack(seqRef, seqError);
             int errorCount = r.Delete + r.Substitution + r.Insert;
             int totalCount = seqRef.Length;

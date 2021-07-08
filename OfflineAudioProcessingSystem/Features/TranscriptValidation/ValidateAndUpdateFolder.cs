@@ -75,7 +75,7 @@ namespace OfflineAudioProcessingSystem.TranscriptValidation
             var outputList = timeStampList.SelectMany(x => File.ReadAllLines(x));
             File.WriteAllLines(Path.Combine(folderPath, "ToAnnotatorTimeStamp.txt"), outputList);
         }
-
+       
         public void ValidateOnlineFolder(string folderPath, bool transferToOutput=false)
         {
             ErrorList = new List<string>();

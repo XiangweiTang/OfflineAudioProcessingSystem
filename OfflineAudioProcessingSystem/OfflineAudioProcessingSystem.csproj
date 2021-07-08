@@ -103,6 +103,7 @@
     <Compile Include="Features\HelloWorld\HelloWorld.cs" />
     <Compile Include="Common\LocalCommon.cs" />
     <Compile Include="Common\LocalConstants.cs" />
+    <Compile Include="Features\RedoTranscriptValidation\ValidateTextAudio.cs" />
     <Compile Include="Features\TranscriptValidation\ConfigTranscriptValidation.cs" />
     <Compile Include="Features\TranscriptValidation\IntervalCheck.cs" />
     <Compile Include="Features\TranscriptValidation\Mapping.cs" />

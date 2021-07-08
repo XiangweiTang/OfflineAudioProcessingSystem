@@ -31,26 +31,28 @@ namespace OfflineAudioProcessingSystem
         }
     }
 
+    
     class OneOffCutAudios
     {
         public void RunCut()
         {
-            var list = CutAudios();
+            //var list = CutAudios();
             string rootPath = @"F:\WorkFolder\300hrsSplit";
-            List<string> o = new List<string>();
-            foreach(var line in list)
-            {
-                line.CutAudio(rootPath);
-                line.CutText(rootPath);
-                o.Add(line.Output());
-            }
-            o.WriteAllLinesToTmp();
+            //List<string> o = new List<string>();
+            //foreach(var line in list)
+            //{
+            //    line.CutAudio(rootPath);
+            //    line.CutText(rootPath);
+            //    o.Add(line.Output());
+            //}
+            //o.WriteAllLinesToTmp();
+            CreateTextFiles(rootPath);
+            OverlapList.OrderBy(x=>x).WriteAllLinesToTmp();
         }
         private IEnumerable<CutAudioLine> CutAudios()
         {
             var list = File.ReadLines(Constants.TOTAL_MAPPING_PATH)
                 .Select(x => new TotalMappingLine(x));
-            int externalIndex = 0;
             foreach(var l in list)
             {
                 if (!File.Exists(l.DeliveredTextPath))
@@ -66,8 +68,10 @@ namespace OfflineAudioProcessingSystem
                         SourceAudioPath = l.DeliveredAudioPath,
                         SourceTextPath = l.DeliveredTextPath,
                         Dialect = l.Dialect,
-                        ExternalIndex = externalIndex,
-                        InternalIndex = i/2,
+                        InputTextPath = l.InputTextPath,
+                        SpeakerId = l.UniversalSpeakerId,
+                        SessionId=l.UniversalFileId.ToString("00000"),
+                        InternalId=(i/2),                 
                         StartTime = content[i].StartTime.ToString(),
                         EndTime = content[i].EndTime.ToString(),
                         SG = content[i].Content,
@@ -75,30 +79,90 @@ namespace OfflineAudioProcessingSystem
                     };
                     yield return line;
                 }
-                externalIndex++;
             }
         }
+        List<string> OverlapList = new List<string>();
+        private void CreateTextFiles(string outputRootPath)
+        {
+            var list = File.ReadLines(Constants.TOTAL_MAPPING_PATH)
+                .Select(x => new TotalMappingLine(x));
+            foreach (var l in list)
+            {
+                if (!File.Exists(l.DeliveredTextPath))
+                    continue;
+                var content = File.ReadLines(l.DeliveredTextPath)
+                    .Select(x => LocalCommon.ExtractTransLine(x))
+                    .ToArray();
+                Sanity.Requires(content.Length % 2 == 0);
+                string[] arrayTS = new string[content.Length / 2];
+                string[] array1 = new string[content.Length / 2];
+                string[] array2 = new string[content.Length / 2];
+                List<string> textList = new List<string>();
+                double preend = 0;
+                for (int i = 0; i < content.Length; i += 2)
+                {
+                    CutAudioLine line = new CutAudioLine
+                    {
+                        SourceAudioPath = l.DeliveredAudioPath,
+                        SourceTextPath = l.DeliveredTextPath,
+                        Dialect = l.Dialect,
+                        InputTextPath = l.InputTextPath,
+                        SpeakerId = l.UniversalSpeakerId,
+                        SessionId = l.UniversalFileId.ToString("00000"),
+                        InternalId = (i / 2),
+                        StartTime = content[i].StartTime.ToString(),
+                        EndTime = content[i].EndTime.ToString(),
+                        SG = content[i].Content,
+                        HG = content[i + 1].Content
+                    };
+                    textList.Add(string.Join("\t", (i / 2).ToString("00000"), "SG", line.SG));
+                    textList.Add(string.Join("\t", (i / 2).ToString("00000"), "HG", line.HG));
+                    double start = double.Parse(line.StartTime);
+                    if (start - preend<-1)
+                    {
+                        OverlapList.Add($"{l.Dialect}\t{l.UniversalSpeakerId}\t{l.UniversalFileId:00000}\t{line.StartTime}\t{preend}");
+                    }
+                    preend = double.Parse(line.EndTime);
+                    arrayTS[i / 2] = $"{line.StartTime}\t{line.EndTime}";
+                    array1[i / 2] = line.SG;
+                    array2[i / 2] = line.HG;
+                }
+                string folderPath = Path.Combine(outputRootPath, l.Dialect, l.UniversalSpeakerId);
+                Directory.CreateDirectory(folderPath);
+                string textgridPath = Path.Combine(outputRootPath, l.Dialect, l.UniversalSpeakerId, l.UniversalFileId.ToString("00000") + ".textgrid");
+                //TextGrid.TimeStampToTextGrid(arrayTS, textgridPath, array1, array2);
+                //string textPath = Path.Combine(outputRootPath, l.Dialect, l.UniversalSpeakerId, l.UniversalFileId.ToString("00000") + ".txt");
+                //File.WriteAllLines(textPath, textList);
+                //string inputAudioPath = l.DeliveredAudioPath;
+                //string newAudioPath= Path.Combine(outputRootPath, l.Dialect, l.UniversalSpeakerId, l.UniversalFileId.ToString("00000") + ".wav");
+                //File.Copy(inputAudioPath, newAudioPath);
+            }
+        }        
     }
     class CutAudioLine : Line
     {
         public string SourceAudioPath { get; set; }
         public string SourceTextPath { get; set; }
         public string Dialect { get; set; }
-        public int ExternalIndex { get; set; }
-        public int InternalIndex { get; set; }
+        public string SpeakerId { get; set; }
+        public string SessionId { get; set; }
+        public int InternalId { get; set; }
         public string StartTime { get; set; }
         public string EndTime { get; set; }
         public string SG { get; set; }
         public string HG { get; set; }
+        public string InputTextPath { get; set; }
         public CutAudioLine() { }
         public CutAudioLine(string s) : base(s) { }
         protected override IEnumerable<object> GetLine()
         {
             yield return SourceAudioPath;
             yield return SourceTextPath;
+            yield return InputTextPath;
             yield return Dialect;
-            yield return ExternalIndex;
-            yield return InternalIndex;
+            yield return SpeakerId;
+            yield return SessionId;
+            yield return InternalId;
             yield return StartTime;
             yield return EndTime;
             yield return SG;
@@ -109,28 +173,30 @@ namespace OfflineAudioProcessingSystem
         {
             SourceAudioPath = split[0];
             SourceTextPath = split[1];
-            Dialect = split[2];
-            ExternalIndex = int.Parse(split[3]);
-            InternalIndex = int.Parse(split[4]);
-            StartTime = split[5];
-            EndTime = split[6];
-            SG = split[7];
-            HG = split[8];
+            InputTextPath = split[2];
+            Dialect = split[3];
+            SpeakerId = split[4];
+            SessionId = split[5];
+            InternalId = int.Parse(split[6]);
+            StartTime = split[7];
+            EndTime = split[8];
+            SG = split[9];
+            HG = split[10];
         }
 
         public void CutAudio(string rootPath)
         {
-            string outputFolder = Path.Combine(rootPath, Dialect, ExternalIndex.ToString());
+            string outputFolder = Path.Combine(rootPath, Dialect, SpeakerId,SessionId);
             Directory.CreateDirectory(outputFolder);
-            string outputPath = Path.Combine(outputFolder, InternalIndex + ".wav");
+            string outputPath = Path.Combine(outputFolder, $"{InternalId:00000}.wav");
             double timeSpan = double.Parse(EndTime) - double.Parse(StartTime);
             LocalCommon.CutAudioWithSox(SourceAudioPath, StartTime, timeSpan, outputPath);
         }
         public void CutText(string rootPath)
         {
-            string outputFolder = Path.Combine(rootPath, Dialect, ExternalIndex.ToString());
+            string outputFolder = Path.Combine(rootPath, Dialect, SpeakerId, SessionId);
             Directory.CreateDirectory(outputFolder);
-            string outputPath = Path.Combine(outputFolder, InternalIndex + ".txt");
+            string outputPath = Path.Combine(outputFolder, $"{InternalId:00000}.txt");
             List<string> list = new List<string>
             {
                 "SG",
